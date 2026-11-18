@@ -1,55 +1,45 @@
-# Voyager Launcher — Loading para Sunshine / Moonlight
+# Voyager Launcher — loading nativo para Sunshine / Moonlight
 
-Projeto independente da biblioteca RecompLauncher. O Voyager e uma tela de carregamento nativa do Windows para jogos iniciados pelo Sunshine e vistos pelo Moonlight.
+Este projeto mostra uma tela de carregamento no Windows enquanto o jogo iniciado via Sunshine abre. O Moonlight transmite essa tela.
 
-## Repositorio
+## Estrutura da pasta
 
-**GitHub:** https://github.com/Niixty/Voyager-Launcher
+- `*.go`, `cmd/`: codigo-fonte do aplicativo e atualizador.
+- `tools/`: scripts de instalacao e sincronizacao.
+- `.github/workflows/`: compila e publica versoes Windows x64 quando a `main` recebe alteracoes.
+- **`app/VoyagerLauncher.exe`** e `app/VoyagerUpdater.exe`: executaveis instalados no proprio clone.
+- **`app/Games/`**: configuracoes, capas e fundos de cada jogo.
 
-O `main` e a versao principal. Qualquer commit novo nessa branch dispara o GitHub Actions, que compila Windows x64, executa verificacoes e publica um **Release v0.8.N** automaticamente. Em PCs que ja possuem o Voyager instalado, a atualizacao e baixada e verificada por SHA-256. O programa se atualiza com o helper nativo apos fechar, sem alterar `Games/`.
+A pasta **`app/`** esta no `.gitignore` e fica somente no seu PC. Os executaveis e os dados de jogos nao sao enviados para o GitHub Desktop. O atualizador busca executaveis nas Releases do GitHub.
 
-## Componentes
+## Migrar a instalacao antiga para app
 
-- `VoyagerLauncher.exe` — gerenciador de jogos + tela de carregamento fullscreen.
-- `VoyagerUpdater.exe` — substitui o programa quando ele nao esta em execucao.
-- `Games/<id>/config.json`, `grid.png`, `hero.png` — **dados locais e pessoais, nunca enviados para o repositorio**.
-- `tools/Sincronizar-Git.ps1` — recebe alteracoes de `origin/main` com `git merge --ff-only`, sem descartar alteracoes locais.
-- `tools/Ativar-Sincronizacao.ps1` — registra tarefas no Agendador do Windows.
-- `tools/Instalar-Voyager.ps1` — instalacao inicial usando o Release do GitHub (sem precisar de Go no PC).
+Se ja instalou em `%LOCALAPPDATA%\VoyagerLauncher`:
+1. Feche o VoyagerLauncher e o VoyagerUpdater.
+2. Abra o clone do repositorio no GitHub Desktop e atualize a branch `main` (Fetch/Pull).
+3. Execute **`MOVER-APP.cmd`** na raiz do repositorio.
+4. Ele copia os executaveis, jogos e configuracoes sem substituir arquivos existentes; mantem a instalacao antiga como backup e atualiza as tarefas agendadas.
+5. Abra `app\VoyagerLauncher.exe`. Confira seus jogos.
+6. **Se o Sunshine ainda aponta para o EXE antigo, altere para o novo caminho**.
 
-## Primeira configuracao — via GitHub Desktop
+No caminho atual do clone, o comando para um jogo tem este formato:
+```text
+"D:\Jogos\Emuladores\Voyager Launcher\Voyager-Launcher\app\VoyagerLauncher.exe" --game "IDDoJogo"
+```
+Ajuste o ID de jogo para aquele cadastrado no gerenciador.
 
-1. No GitHub Desktop, publique um repositorio proprio chamado **Voyager-Launcher** em `Niixty` (nao um fork). Para instalar este codigo, copie o conteudo da pasta do projeto para dentro da pasta do repositorio, mantendo `.github/workflows/windows-release.yml` e `cmd/updater/main.go`.
-2. No GitHub Desktop, faca **Commit to main** e **Push origin**. Acesse `https://github.com/Niixty/Voyager-Launcher/actions` e aguarde uma compilacao concluida com sucesso. Isso deve criar automaticamente um Release com os executaveis.
-3. Na copia local do repositorio, abra `INSTALAR-VOYAGER.cmd`. Escolha a **pasta onde ja esta seu Voyager** para preservar o comando do Sunshine e os jogos; ou aceite a pasta padrao `%LOCALAPPDATA%\VoyagerLauncher`.
-4. O instalador baixa os dois `.exe` da release, valida a integridade, preserva `Games`, e cadastra **duas tarefas**: `Voyager-Git-Sync` (10 minutos) e `Voyager-EXE-Update` (30 minutos).
-5. Sunshine continua usando `"C:\SuaPasta\VoyagerLauncher.exe" --game "IDDoJogo"`.
+## Instalar do zero
 
-## Como as atualizacoes se propagam
+Execute `INSTALAR-VOYAGER.cmd` e pressione Enter para instalar por padrao em `app/`. O instalador baixa a ultima Release, verifica SHA-256, preserva Games e registra as tarefas. O agendador pode ser refeito com `ATIVAR-SINCRONIZACAO.cmd`.
 
-**Codigo-fonte:** edicoes, novos arquivos e exclusoes feitos no GitHub chegam a pasta local clonada pelo GitHub Desktop a cada 10 minutos, **somente** quando voce estiver em `main`, a copia local estiver limpa e o historico aceitar fast-forward. Se houver mudancas locais, o script para e registra a situacao em `%LOCALAPPDATA%\VoyagerLauncher\sync-git.log`. NUNCA usa `reset --hard`, `push` nem `force`.
+## Como funcionam as atualizacoes
 
-**Alteracoes feitas no proprio PC:** continuam precisando de **Commit** e **Push origin** no GitHub Desktop. Nenhum arquivo pessoal sera enviado automaticamente.
+- **Codigo-fonte:** a tarefa `Voyager-Git-Sync` sincroniza a `main` a cada 10 minutos com `fetch` + `merge --ff-only`, apenas quando nao existem alteracoes locais. As alteracoes feitas no PC continuam exigindo Commit + Push pelo GitHub Desktop.
+- **Aplicativo:** a tarefa `Voyager-EXE-Update` consulta Releases a cada 30 minutos, e o gerenciador tambem consulta ao abrir. A pasta `app/Games/` permanece intocada.
+- **Atualizador auxiliar:** se `VoyagerUpdater.exe` mudar, execute novamente `INSTALAR-VOYAGER.cmd`.
 
-**Executavel:** cada commit no `main` produz um novo Release. O PC checa a cada 30 minutos de forma silenciosa ou quando o gerenciador e aberto. Quando disponivel, o programa e baixado, conferido e substituido depois que a instancia atual termina. **Durante `--game` nao ha requisicoes de rede nem atraso por atualizacao.** Se nao tiver internet, a versao instalada continua operando.
-
-**Atualizador:** o helper `VoyagerUpdater.exe` nao se atualiza a si mesmo. Se o helper mudar, execute `INSTALAR-VOYAGER.cmd` para atualizar os dois binarios manualmente.
-
-## Seguranca e limites
-
-- Tarefas agendadas fazem apenas atualizacao remota -> local. O GitHub Desktop nao faz push automatico.
-- Nenhuma tarefa modifica `Games/`, capas, ROMs ou saves.
-- O Git nao consegue aplicar alteracoes remotas se voce tiver arquivos locais alterados sem commit ou branches divergentes; resolva no GitHub Desktop.
-- O usuario precisa de acesso de escrita na pasta do programa. Evite `C:\Program Files`.
-- O `.exe` nao tem assinatura de codigo. O SHA-256 valida os bytes recebidos, mas nao e substituto de assinatura digital.
-- O fluxo foi compilado fora do Windows e precisa de teste real do Agendador de Tarefas e atualizacao no seu PC.
+Releases: https://github.com/Niixty/Voyager-Launcher/releases
 
 ## Desenvolvimento
 
-Go 1.23+:
-
-```bash
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test ./...
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-H windowsgui' -o VoyagerLauncher.exe .
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-H windowsgui' -o VoyagerUpdater.exe ./cmd/updater
-```
+Go 1.23+; o GitHub Actions executa testes e compila os dois executaveis no Windows. O `exe` nao possui assinatura digital. O SHA-256 verifica a integridade, mas nao substitui uma assinatura de codigo.

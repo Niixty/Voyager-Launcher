@@ -6,8 +6,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $Destino) {
-    $padrao = Join-Path $env:LOCALAPPDATA 'VoyagerLauncher'
-    Write-Host "Pasta onde o Voyager sera instalado. Se ja existe, informe a MESMA pasta para preservar o comando do Sunshine."
+    $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+    $padrao = Join-Path $repo 'app'
+    Write-Host "Instalacao padrao em app/ dentro do repositorio. Para migrar dados existentes, execute MOVER-APP.cmd antes."
     $inputDir = Read-Host "Pasta do Voyager [Enter: $padrao]"
     if ([string]::IsNullOrWhiteSpace($inputDir)) { $Destino = $padrao } else { $Destino = $inputDir.Trim('"') }
 }

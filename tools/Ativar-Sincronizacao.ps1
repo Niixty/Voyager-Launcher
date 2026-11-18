@@ -3,12 +3,13 @@
 # As tarefas usam o usuario atual (somente quando a sessao estiver iniciada).
 [CmdletBinding()]
 param(
-    [string]$PastaVoyager = (Join-Path $env:LOCALAPPDATA 'VoyagerLauncher')
+    [string]$PastaVoyager
 )
 $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $source = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'Sincronizar-Git.ps1')).Path
+if ([string]::IsNullOrWhiteSpace($PastaVoyager)) { $PastaVoyager = Join-Path $repo 'app' }
 $PastaVoyager = [IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($PastaVoyager))
 $launcher = Join-Path $PastaVoyager 'VoyagerLauncher.exe'
 
