@@ -18,6 +18,7 @@ func main() {
 		return
 	}
 	rootDir = filepath.Dir(exe)
+	loadOverlayTheme()
 	// Verificacao silenciosa acionada pelo Agendador de Tarefas do Windows.
 	// Ela nao abre janela, nao bloqueia o Sunshine e nao altera a pasta Games.
 	args := os.Args[1:]

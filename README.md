@@ -10,7 +10,15 @@ Este projeto mostra uma tela de carregamento no Windows enquanto o jogo iniciado
 - **`app/VoyagerLauncher.exe`** e `app/VoyagerUpdater.exe`: executaveis instalados no proprio clone.
 - **`app/Games/`**: configuracoes, capas e fundos de cada jogo.
 
-A pasta **`app/`** esta no `.gitignore` e fica somente no seu PC. Os executaveis e os dados de jogos nao sao enviados para o GitHub Desktop. O atualizador busca executaveis nas Releases do GitHub.
+A pasta **`app/` agora e visivel no GitHub** para temas, recursos e documentacao. Os binarios `.exe` e os dados `app/Games/` continuam ignorados pelo Git, para nao haver conflitos com o atualizador nem expor dados pessoais. Os `.exe` permanecem disponiveis nas **Releases**.
+
+### Edicao por modulos
+
+- `app/themes/default.json`: cores e textos do loading, aplicados quando o Voyager e reiniciado, sem recompilar.
+- `internal/appearance/`: modulo Go independente que carrega e valida o tema.
+- `overlay.go`, `manager.go`, `update.go`: codigo-fonte por funcao; editar codigo exige nova compilacao automatica nas Actions.
+
+Um executavel compilado nao pode ser separado em pastas editaveis. As fontes e recursos externos sao as partes que editamos; o GitHub gera um novo `.exe` quando o codigo muda.
 
 ## Migrar a instalacao antiga para app
 

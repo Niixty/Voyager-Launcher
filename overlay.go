@@ -16,9 +16,17 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"voyager/native/internal/appearance"
 )
 
 // Native Win32 overlay. No PowerShell, Windows Forms, browser or .NET runtime.
+var overlayTheme = appearance.Default()
+
+func loadOverlayTheme() {
+    overlayTheme = appearance.Load(filepath.Join(rootDir, "themes", "default.json"))
+}
+
 type overlayState struct {
 	cfg                                gameConfig
 	id                                 string
@@ -100,11 +108,11 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 	if w < 1 || h < 1 {
 		return
 	}
-	p.clear(0xff111216)
+	p.clear(palette(overlayTheme.Color("background")))
 	if background != nil {
 		p.imageCover(background, 0, 0, w, h)
 	}
-	p.fill(0, 0, w, h, 0xc8080a0c)
+	p.fill(0, 0, w, h, palette(overlayTheme.Color("dimOverlay")))
 	// UI anchored to 1600 x 900 reference and centered at any monitor size.
 	s := math.Min(float64(w)/1600, float64(h)/900)
 	if s < .28 {
@@ -120,8 +128,8 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 	T := func(x, y, ww, hh float64, txt string, size float32, c palette, bold bool) {
 		p.text(X(x), Y(y), D(ww), D(hh), txt, size*float32(s), c, bold)
 	}
-	p.ellipse(X(-622), Y(-329), D(9), D(9), 0xffacb4bf)
-	T(-600, -336, 330, 35, "VOYAGER", 15, 0xffd5d8dc, true)
+	p.ellipse(X(-622), Y(-329), D(9), D(9), palette(overlayTheme.Color("brandDot")))
+	T(-600, -336, 330, 35, overlayTheme.Brand, 15, palette(overlayTheme.Color("brandText")), true)
 	p.fill(X(-615), Y(-216), D(274), D(411), 0x65000000)
 	p.fill(X(-621), Y(-224), D(274), D(411), 0xff1b1d20)
 	if cover != nil {
@@ -130,26 +138,26 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 		T(-615, -25, 265, 45, "CAPA DO JOGO", 17, cMuted, false)
 	}
 	// Cover border, responsive to video size.
-	p.fill(X(-621), Y(-224), D(274), D(1), 0x88999ca0)
-	p.fill(X(-621), Y(186), D(274), D(1), 0x88999ca0)
-	T(-274, -207, 810, 33, strings.ToUpper(c.Platform), 15, 0xffb6babf, false)
-	T(-274, -150, 845, 120, c.Title, 43, 0xfff6f7f8, true)
+	p.fill(X(-621), Y(-224), D(274), D(1), palette(overlayTheme.Color("coverBorder")))
+	p.fill(X(-621), Y(186), D(274), D(1), palette(overlayTheme.Color("coverBorder")))
+	T(-274, -207, 810, 33, strings.ToUpper(c.Platform), 15, palette(overlayTheme.Color("platform")), false)
+	T(-274, -150, 845, 120, c.Title, 43, palette(overlayTheme.Color("gameTitle")), true)
 	if len(c.Description) > 270 {
 		c.Description = c.Description[:270]
 	}
-	T(-274, 15, 790, 85, c.Description, 19, 0xffc1c5c8, false)
-	heading := "Iniciando jogo"
-	statusColor := palette(0xffeaeced)
+	T(-274, 15, 790, 85, c.Description, 19, palette(overlayTheme.Color("description")), false)
+	heading := overlayTheme.LoadingTitle
+	statusColor := palette(overlayTheme.Color("heading"))
 	if failed {
-		heading = "Falha ao iniciar"
-		statusColor = 0xffeea8a8
+		heading = overlayTheme.FailureTitle
+		statusColor = palette(overlayTheme.Color("headingError"))
 	}
 	T(-274, 124, 615, 43, heading, 25, statusColor, false)
-	T(477, 130, 125, 38, fmt.Sprintf("%d%%", percent), 21, 0xffe2e5ea, false)
-	p.fill(X(-274), Y(184), D(865), D(6), 0xff454a50)
-	fillColor := palette(0xffacb7c1)
+	T(477, 130, 125, 38, fmt.Sprintf("%d%%", percent), 21, palette(overlayTheme.Color("percentage")), false)
+	p.fill(X(-274), Y(184), D(865), D(6), palette(overlayTheme.Color("progressTrack")))
+	fillColor := palette(overlayTheme.Color("progressFill"))
 	if failed {
-		fillColor = 0xffc77878
+		fillColor = palette(overlayTheme.Color("progressError"))
 	}
 	if percent > 0 {
 		p.fill(X(-274), Y(184), D(865*float64(percent)/100), D(6), fillColor)
@@ -160,8 +168,8 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 	if failed {
 		phase = detail
 	}
-	T(-274, 201, 865, 40, phase, 15, 0xffa6aab0, false)
-	T(-622, 332, 370, 35, "VOYAGER LAUNCHER", 12, 0xff7b8088, false)
+	T(-274, 201, 865, 40, phase, 15, palette(overlayTheme.Color("status")), false)
+	T(-622, 332, 370, 35, overlayTheme.Footer, 12, palette(overlayTheme.Color("footer")), false)
 }
 func loadBlurry(src string) *img {
 	if src == "" {

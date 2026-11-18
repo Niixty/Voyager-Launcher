@@ -1,9 +1,15 @@
+# EXEs distribuidos pelo GitHub Releases, nao versionados no Git
 *.exe
 *.tmp
 *.bak
+*.backup
 *.log
-Games/
 /dist/
-/VoyagerLauncher.next.exe
-/VoyagerLauncher.next.exe.tmp
-/app/
+# Dados pessoais nao entram no repositorio
+/Games/
+/app/Games/
+/app/cache/
+/app/screenshots/
+/app/updates/
+/app/*.local.json
+# app/themes, app/assets, app/docs estao versionados

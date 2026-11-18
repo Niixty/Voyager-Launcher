@@ -1,0 +1,24 @@
+{
+  "brand": "VOYAGER",
+  "footer": "VOYAGER LAUNCHER",
+  "loadingTitle": "Iniciando jogo",
+  "failureTitle": "Falha ao iniciar",
+  "colors": {
+    "background": "#FF111216",
+    "dimOverlay": "#C8080A0C",
+    "brandDot": "#FFACB4BF",
+    "brandText": "#FFD5D8DC",
+    "coverBorder": "#88999CA0",
+    "platform": "#FFB6BABF",
+    "gameTitle": "#FFF6F7F8",
+    "description": "#FFC1C5C8",
+    "heading": "#FFEAECED",
+    "headingError": "#FFEEA8A8",
+    "percentage": "#FFE2E5EA",
+    "progressTrack": "#FF454A50",
+    "progressFill": "#FFACB7C1",
+    "progressError": "#FFC77878",
+    "status": "#FFA6AAB0",
+    "footer": "#FF7B8088"
+  }
+}
