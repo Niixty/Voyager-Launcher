@@ -148,7 +148,8 @@ func newManager() error {
 	m := manager
 	m.ids = listGames()
 	instance := call(pGetModuleHandle, 0)
-	wc := wndClass{Size: uint32(unsafe.Sizeof(wndClass{})), Style: CS_HREDRAW | CS_VREDRAW, WndProc: managerCallback, Instance: instance, Cursor: call(pLoadCursor, 0, IDC_ARROW), ClassName: uintptr(unsafe.Pointer(managerClassName))}
+	appIcon := call(pLoadIcon, instance, 1) // RT_GROUP_ICON principal embutido no EXE
+	wc := wndClass{Size: uint32(unsafe.Sizeof(wndClass{})), Style: CS_HREDRAW | CS_VREDRAW, WndProc: managerCallback, Instance: instance, Icon: appIcon, IconSm: appIcon, Cursor: call(pLoadCursor, 0, IDC_ARROW), ClassName: uintptr(unsafe.Pointer(managerClassName))}
 	if call(pRegisterClass, uintptr(unsafe.Pointer(&wc))) == 0 {
 		return winError("erro ao registrar interface")
 	}

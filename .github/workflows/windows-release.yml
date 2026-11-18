@@ -31,6 +31,17 @@ jobs:
         run: |
           go test -vet=off ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preparar icone do aplicativo
+        shell: pwsh
+        run: |
+          # Rsrc transforma o ICO versionado no Git em recurso Windows embutido no EXE.
+          go install github.com/akavel/rsrc@v0.10.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $rsrc = Join-Path (go env GOPATH) "bin/rsrc.exe"
+          if (-not (Test-Path $rsrc)) { throw "Gerador de recursos Windows nao encontrado" }
+          & $rsrc -arch amd64 -ico "app/assets/VoyagerLauncher.ico" -o "rsrc_windows_amd64.syso"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "rsrc_windows_amd64.syso")) { throw "Recurso do icone nao foi criado" }
       - name: Compilar aplicativos Windows
         shell: pwsh
         run: |

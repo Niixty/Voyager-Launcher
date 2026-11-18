@@ -192,6 +192,7 @@ var (
 	pSendMessage                 = u32.NewProc("SendMessageW")
 	pSetTimer                    = u32.NewProc("SetTimer")
 	pKillTimer                   = u32.NewProc("KillTimer")
+	pLoadIcon                    = u32.NewProc("LoadIconW")
 	pLoadCursor                  = u32.NewProc("LoadCursorW")
 	pIsWindowVisible             = u32.NewProc("IsWindowVisible")
 	pIsIconic                    = u32.NewProc("IsIconic")

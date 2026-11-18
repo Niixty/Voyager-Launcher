@@ -51,3 +51,7 @@ Releases: https://github.com/Niixty/Voyager-Launcher/releases
 ## Desenvolvimento
 
 Go 1.23+; o GitHub Actions executa testes e compila os dois executaveis no Windows. O `exe` nao possui assinatura digital. O SHA-256 verifica a integridade, mas nao substitui uma assinatura de codigo.
+
+## Icone do aplicativo
+
+O icone oficial fica em `app/assets/VoyagerLauncher.ico`, criado a partir da arte enviada pelo autor. A compilacao Windows gera `rsrc_windows_amd64.syso` com `github.com/akavel/rsrc@v0.10.2`, incorporando o icone ao executavel. A janela principal tambem usa esse recurso. O formato `.ico` e um arquivo binario versionado; os executaveis continuam nas Releases.
