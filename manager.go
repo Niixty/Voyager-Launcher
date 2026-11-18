@@ -87,11 +87,16 @@ func managerWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		call(pSetBkColor, hdc, 0x00262222)
 		return m.darkBrush
 	case WM_COMMAND:
-		if m != nil && (wp>>16) == 0x300 {
+		if m != nil && (wp>>16) == 0x300 { // EN_CHANGE
 			if lp == m.inputs["ID"] {
+				// Atualiza apenas os campos derivados. Nao redesenhe a janela inteira.
 				m.refreshCommands()
+			} else if lp == m.inputs["Title"] {
+				// O titulo tambem aparece no cabecalho. Redesenhe so essa area
+				// e nao apague o fundo novamente a cada tecla digitada.
+				m.invalidateTitle()
 			}
-			invalid(hwnd)
+			// Outros campos EDIT desenham seu proprio texto pelo Windows.
 		}
 		return 0
 	case WM_LBUTTONDOWN:
@@ -129,6 +134,19 @@ func managerWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 	}
 	return call(pDefWindowProc, hwnd, uintptr(msg), wp, lp)
 }
+// invalidateTitle limita o repintar a area visivel do cabecalho.
+ // Sem isso, EN_CHANGE invalidava toda a janela a cada caractere.
+func (m *managerState) invalidateTitle() {
+	if m.hwnd == 0 {
+		return
+	}
+	area := rect{Left: 305, Top: 48, Right: int32(m.windowW - 270), Bottom: 115}
+	if area.Right > area.Left {
+		// FALSE: nao solicitar limpeza de fundo antes do WM_PAINT.
+		call(pInvalidate, m.hwnd, uintptr(unsafe.Pointer(&area)), 0)
+	}
+}
+
 func (m *managerState) close() {
 	if m.hero != nil {
 		m.hero.close()
