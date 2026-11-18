@@ -35,7 +35,7 @@ function Agendar {
     )
     # Separar Execute e Argument evita os problemas de aspas do /TR do schtasks.exe.
     $action = New-ScheduledTaskAction -Execute $Executavel -Argument $Argumentos -WorkingDirectory $repo
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
+    $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(1)) `
         -RepetitionInterval (New-TimeSpan -Minutes $Minutos) `
         -RepetitionDuration (New-TimeSpan -Days 3650)
     try {
