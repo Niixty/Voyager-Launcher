@@ -1,0 +1,67 @@
+name: Voyager Launcher - Windows x64
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: voyager-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout do projeto
+        uses: actions/checkout@v4
+      - name: Preparar Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Validar codigo
+        shell: pwsh
+        run: |
+          go test -vet=off ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compilar aplicativos Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          # Cada commit no main ganha sua propria versao sem criar tags manualmente.
+          $version = '0.8.0'
+          if ('${{ github.ref }}' -eq 'refs/heads/main') { $version = '0.8.${{ github.run_number }}' }
+          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version" -o dist/VoyagerLauncher.exe .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/VoyagerUpdater.exe ./cmd/updater
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Get-FileHash dist/VoyagerLauncher.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerLauncher.exe' | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
+          (Get-FileHash dist/VoyagerUpdater.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerUpdater.exe' | Add-Content -Path dist/SHA256SUMS.txt -Encoding ascii
+      - name: Guardar artefatos de teste
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voyager-Windows-x64
+          path: dist/*
+      - name: Publicar nova versao automaticamente (somente main)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v0.8.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Voyager Launcher v0.8.${{ github.run_number }}
+          make_latest: 'true'
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/VoyagerLauncher.exe
+            dist/VoyagerUpdater.exe
+            dist/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

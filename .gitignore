@@ -1,0 +1,8 @@
+*.exe
+*.tmp
+*.bak
+*.log
+Games/
+/dist/
+/VoyagerLauncher.next.exe
+/VoyagerLauncher.next.exe.tmp

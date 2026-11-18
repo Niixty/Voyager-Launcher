@@ -1,0 +1,16 @@
+VOYAGER LAUNCHER - GITHUB DESKTOP + ATUALIZACAO AUTOMATICA
+
+1. Crie o repositorio Niixty/Voyager-Launcher (Publico, NAO fork).
+2. Baixe/extraia esta pasta e coloque os arquivos dentro da pasta criada pelo GitHub Desktop.
+3. GitHub Desktop: Commit to main > Push origin.
+4. GitHub: aba Actions, veja o build e o novo Release.
+5. Nesta pasta no PC: execute INSTALAR-VOYAGER.cmd uma unica vez.
+   Informe a pasta onde ja esta o Voyager para nao quebrar o Sunshine.
+6. As novas versoes vao atualizar sozinhas quando puderem.
+
+Git: recebe novos arquivos, edicoes e exclusoes a cada 10 min quando local limpo.
+EXE: verifica versoes a cada 30 min sem interromper os jogos.
+Arquivos locais com mudancas: nenhum script apaga/reescreve.
+Push do PC para o GitHub: continua manual no GitHub Desktop.
+
+Os arquivos Games, capas, ROMs, saves nao sobem para o GitHub.
