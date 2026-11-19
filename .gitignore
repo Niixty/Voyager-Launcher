@@ -19,3 +19,9 @@
 
 # Layout global do usuario, salvo dentro da instalacao
 /app/loading_default.json
+
+/app/Games-archive/
+/Games-archive/
+/app/.voyager-update.lock
+/app/VoyagerLauncher.next.exe.sha256
+/app/loading_default.json.before_global_*.json

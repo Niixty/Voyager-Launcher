@@ -18,10 +18,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"voyager/native/internal/updatefiles"
 )
 
 // Build tags replace this value in published releases.
-var version = "0.8.0"
+var version = "0.9.0-preview"
 
 const releasesEndpoint = "https://api.github.com/repos/Niixty/Voyager-Launcher/releases/latest"
 const releaseAsset = "VoyagerLauncher.exe"
@@ -98,6 +99,14 @@ func updateHTTPClient() *http.Client {
 }
 
 func checkAndStageUpdate() (string, error) {
+	if strings.HasSuffix(version, "-preview") {
+		return "", nil
+	}
+	unlock, err := updatefiles.Lock(rootDir)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", releasesEndpoint, nil)
@@ -153,16 +162,13 @@ func checkAndStageUpdate() (string, error) {
 			res.Body.Close()
 			return "", fmt.Errorf("erro no download: HTTP %d", res.StatusCode)
 		}
-		tmp := filepath.Join(rootDir, stagedAsset+".tmp")
-		file, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-		if os.IsExist(err) {
-			_ = os.Remove(tmp)
-			file, err = os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-		}
+		file, err := os.CreateTemp(rootDir, ".voyager-download-*.tmp")
 		if err != nil {
 			res.Body.Close()
 			return "", err
 		}
+		tmp := file.Name()
+		defer os.Remove(tmp)
 		hash := sha256.New()
 		bytes, e := io.CopyN(io.MultiWriter(file, hash), res.Body, asset.Size+1)
 		closeErr := file.Close()
@@ -180,7 +186,10 @@ func checkAndStageUpdate() (string, error) {
 			return "", errors.New("SHA-256 inválido")
 		}
 		dest := filepath.Join(rootDir, stagedAsset)
-		_ = os.Remove(dest) // stale stage left by an interrupted previous attempt
+
+		if err = os.WriteFile(dest+".sha256", []byte(strings.TrimPrefix(asset.Digest, "sha256:")), 0600); err != nil {
+			return "", err
+		}
 		if err = os.Rename(tmp, dest); err != nil {
 			_ = os.Remove(tmp)
 			return "", err

@@ -47,14 +47,34 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           # Cada commit no main ganha sua propria versao sem criar tags manualmente.
-          $version = '0.8.0'
-          if ('${{ github.ref }}' -eq 'refs/heads/main') { $version = '0.8.${{ github.run_number }}' }
-          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version" -o dist/VoyagerLauncher.exe .
+          $version = '0.9.0-preview'
+          if ('${{ github.ref }}' -eq 'refs/heads/main') { $version = '0.9.${{ github.run_number }}' }
+          go build -tags production,native_webview2loader -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version" -o dist/VoyagerLauncher.exe .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/VoyagerUpdater.exe ./cmd/updater
+          go build -tags production -trimpath -ldflags '-H windowsgui -s -w' -o dist/VoyagerUpdater.exe ./cmd/updater
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Get-FileHash dist/VoyagerLauncher.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerLauncher.exe' | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
           (Get-FileHash dist/VoyagerUpdater.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerUpdater.exe' | Add-Content -Path dist/SHA256SUMS.txt -Encoding ascii
+      - name: Testar loading de executável e atalho
+        shell: pwsh
+        run: ./tools/tests/overlay-smoke.ps1
+      - name: Preparar runtime WebView2 no runner
+        shell: pwsh
+        run: |
+          $runtime = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application\*\msedgewebview2.exe" -ErrorAction SilentlyContinue
+          if (-not $runtime) {
+            $bootstrap = Join-Path $env:RUNNER_TEMP "WebView2Setup.exe"
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrap
+            if ((Get-AuthenticodeSignature $bootstrap).Status -ne 'Valid') { throw 'Assinatura inválida do instalador WebView2' }
+            $install = Start-Process $bootstrap -ArgumentList '/silent','/install' -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw "WebView2 setup: $($install.ExitCode)" }
+          }
+      - name: Testar o gerenciador WebView2 no Windows
+        run: go test -vet=off -tags production,native_webview2loader,studioacceptance -timeout 150s -run TestStudioAcceptance -v .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Voyager-Interface
+          path: evidence/*.png
       - name: Guardar artefatos de teste
         uses: actions/upload-artifact@v4
         with:
@@ -64,9 +84,9 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v0.8.${{ github.run_number }}
+          tag_name: v0.9.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          name: Voyager Launcher v0.8.${{ github.run_number }}
+          name: Voyager Launcher v0.9.${{ github.run_number }}
           make_latest: 'true'
           prerelease: false
           generate_release_notes: true

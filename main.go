@@ -72,6 +72,13 @@ func main() {
 		exitLog(err)
 		return
 	}
+	if len(args) == 0 {
+		if err := newStudio(); err == nil {
+			return
+		} else {
+			logSilentUpdateError(err)
+		}
+	}
 	if err := newManager(); err != nil {
 		exitLog(err)
 	}

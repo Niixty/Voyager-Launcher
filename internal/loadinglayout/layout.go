@@ -6,7 +6,7 @@ import (
     "fmt"
     "math"
     "os"
-    "path/filepath"
+    "voyager/native/internal/jsonstore"
 )
 
 const VirtualWidth = 1600
@@ -131,21 +131,5 @@ func Save(path string,l Layout)error {
     l=l.Normalize()
     data,err:=json.MarshalIndent(l,"","  ")
     if err!=nil{return err}
-    dir:=filepath.Dir(path)
-    if err=os.MkdirAll(dir,0755);err!=nil{return err}
-    tmp,err:=os.CreateTemp(dir,"layout-*.tmp")
-    if err!=nil{return err}
-    name:=tmp.Name()
-    defer os.Remove(name)
-    if _,err=tmp.Write(append(data,'\n'));err!=nil{tmp.Close();return err}
-    if err=tmp.Close();err!=nil{return err}
-    if _,err=os.Stat(path);err==nil{
-        backup:=path+".backup"
-        _=os.Remove(backup)
-        if err=os.Rename(path,backup);err!=nil{return err}
-        if err=os.Rename(name,path);err!=nil{_ =os.Rename(backup,path);return err}
-        _=os.Remove(backup)
-        return nil
-    }
-    return os.Rename(name,path)
+    return jsonstore.Write(path,append(data,'\n'))
 }

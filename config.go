@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"voyager/native/internal/jsonstore"
 )
 
 type gameConfig struct {
@@ -83,7 +84,9 @@ func readConfig(id string) (gameConfig, error) {
 	if c.Hero == "" {
 		c.Hero = "hero.png"
 	}
-	if c.Cartridge == "" { c.Cartridge = "cartridge.png" }
+	if c.Cartridge == "" {
+		c.Cartridge = "cartridge.png"
+	}
 	return c, nil
 }
 func writeConfig(id string, c gameConfig) error {
@@ -109,14 +112,26 @@ func writeConfig(id string, c gameConfig) error {
 	if err := os.MkdirAll(gameDir(id), 0755); err != nil {
 		return err
 	}
-	c.SchemaVersion = 6
-	c.Hero = "hero.png"
-	c.Grid = "grid.png"
-	c.Cartridge = "cartridge.png"
+	if c.SchemaVersion < 6 {
+		c.SchemaVersion = 6
+	}
+	if c.Hero == "" {
+		c.Hero = "hero.png"
+	}
+	if c.Grid == "" {
+		c.Grid = "grid.png"
+	}
+	if c.Cartridge == "" {
+		c.Cartridge = "cartridge.png"
+	}
 	// Preserve optional future metadata but remove all obsolete time fields.
 	doc := map[string]json.RawMessage{}
 	if data, err := os.ReadFile(configFile(id)); err == nil {
-		_ = json.Unmarshal(data, &doc)
+		if err = json.Unmarshal(data, &doc); err != nil || doc == nil {
+			return errors.New("config.json inválido. O arquivo original foi preservado")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
 	}
 	delete(doc, "loadingDurationSeconds")
 	delete(doc, "fadeOutSeconds")
@@ -134,15 +149,7 @@ func writeConfig(id string, c gameConfig) error {
 	if err != nil {
 		return err
 	}
-	tmp := configFile(id) + ".tmp"
-	if err = os.WriteFile(tmp, append(saved, '\n'), 0644); err != nil {
-		return err
-	}
-	if err = os.Rename(tmp, configFile(id)); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
+	return jsonstore.Write(configFile(id), append(saved, '\n'))
 }
 func resolveGameFile(name, folder string) string {
 	if name == "" {
@@ -186,6 +193,9 @@ func duplicateDir(src, dst string) error {
 	return filepath.Walk(src, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("link não importado: %s", p)
 		}
 		rel, err := filepath.Rel(src, p)
 		if err != nil {

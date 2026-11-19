@@ -111,10 +111,15 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 	return call(pDefWindowProc, hwnd, uintptr(m), wp, lp)
 }
 func drawOverlay(p *painter, c gameConfig, originX, originY, w, h, percent int, phase, detail string, cartridge, background *img, heroColor uint32, bounceY float64, layout ll.Layout, failed bool) {
+ drawOverlayPass(p,c,originX,originY,w,h,percent,phase,detail,cartridge,background,heroColor,bounceY,layout,failed,true)
+}
+func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent int, phase, detail string, cartridge, background *img, heroColor uint32, bounceY float64, layout ll.Layout, failed,paintBackground bool) {
     if w<1 || h<1 {return}
-    p.fill(originX,originY,w,h,palette(overlayTheme.Color("background")))
-    if background!=nil {p.imageCover(background,originX,originY,w,h)}
-    p.fill(originX,originY,w,h,palette(overlayTheme.Color("dimOverlay")))
+    if paintBackground {
+        p.fill(originX,originY,w,h,palette(overlayTheme.Color("background")))
+        if background!=nil {p.imageCover(background,originX,originY,w,h)}
+        p.fill(originX,originY,w,h,palette(overlayTheme.Color("dimOverlay")))
+    }else{p.clear(0)}
     s:=math.Min(float64(w)/ll.VirtualWidth,float64(h)/ll.VirtualHeight)
     if s>2.6{s=2.6}
     if s<=0{return}
@@ -125,7 +130,7 @@ func drawOverlay(p *painter, c gameConfig, originX, originY, w, h, percent int, 
     D:=func(v float64)int{return int(math.Max(1,math.Round(v*s)))}
     if heroColor==0 {heroColor=heroaccent.Neutral}
     if phase==""{phase="Preparando o jogo"}
-    if failed{phase=detail}
+    if failed && detail!="" {phase=detail}
     description:=[]rune(c.Description)
     if len(description)>270{description=description[:270]}
     for _,n:=range layout.Elements {
@@ -361,7 +366,7 @@ func screenRects() []rect {
 }
 // A subtle, continuous vertical bob: roughly 8 reference pixels, 2.6 s per cycle.
 func (o *overlayState) cartridgeOffset() float64 {
-	if o.started.IsZero() { return 0 }
+	if !appPrefs.AnimateCartridge || o.started.IsZero() { return 0 }
 	// Sinusoidal easing avoids abrupt direction changes. The static background
 	// and text are cached, so only the cartridge is animated at up to ~60 FPS.
 	return 11 * math.Sin(time.Since(o.started).Seconds() * (2 * math.Pi / 2.9))
@@ -416,7 +421,7 @@ func (o *overlayState) run() error {
 	screens := screenRects()
 	instance := call(pGetModuleHandle, 0)
 	for _, r := range screens {
-		h := call(pCreateWindow, WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_LAYERED, uintptr(unsafe.Pointer(overlayClassName)), ptrStr(""), WS_POPUP|WS_VISIBLE, uintptr(r.Left), uintptr(r.Top), uintptr(r.w()), uintptr(r.h()), 0, 0, instance, 0)
+		h := call(pCreateWindow, WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_LAYERED, uintptr(unsafe.Pointer(overlayClassName)), uintptr(wide("")), WS_POPUP|WS_VISIBLE, uintptr(r.Left), uintptr(r.Top), uintptr(r.w()), uintptr(r.h()), 0, 0, instance, 0)
 		if h == 0 {
 			continue
 		}
@@ -437,11 +442,12 @@ func (o *overlayState) run() error {
 		o.fail = err.Error()
 		o.timeFailed = time.Now()
 		o.phase = o.fail
+ logLaunchFailure(o.id,o.fail)
 		o.invalidateAll()
 	}
 	// Request ~60 FPS while the loading is active; Windows may coalesce ticks.
 	// Detection stays throttled separately at ~160ms.
-	call(pSetTimer, o.windows[0], 1, 16, 0)
+	interval:=uintptr(16);if n:=o.layout.Find(ll.Cartridge);!appPrefs.AnimateCartridge||o.cartridge==nil||n==nil||!n.Visible{interval=50};call(pSetTimer,o.windows[0],1,interval,0)
 	windowsLoop()
 	return nil
 }
@@ -498,12 +504,7 @@ func (o *overlayState) startGame() error {
 	o.phase = "Abrindo o jogo"
 	o.invalidateAll()
 	if strings.EqualFold(filepath.Ext(execPath), ".lnk") {
-		// ShellExecute resolves Windows shortcuts. The process tracker finds the actual game window.
-		verb := ptrStr("open")
-		r := call(pShellExecute, 0, verb, ptrStr(execPath), ptrStr(c.Arguments), ptrStr(workdir), SW_SHOWNORMAL)
-		if r <= 32 {
-			return fmt.Errorf("não foi possível abrir o atalho (%d)", r)
-		}
+		pid,err:=launchShortcut(execPath,c.Arguments,workdir);if err!=nil{return err};o.launchPID=pid
 	} else {
 		cmd := exec.Command(execPath, args...)
 		cmd.Dir = workdir
@@ -654,23 +655,20 @@ func isUsableWindow(h uintptr) bool {
 func (o *overlayState) findGameWindow() uintptr {
 	ps := snapshotProcesses()
 	best, bestScore := uintptr(0), -1
-	requested := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(o.cfg.WaitForProcess), ".exe"))
+	requested := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(o.cfg.WaitForProcess)), ".exe")
 	enumeratedWindows = enumeratedWindows[:0]
 	call(pEnumWindows, enumGameWindowCallback, 0)
-	fallback := []uintptr{}
+ foreground:=call(u32.NewProc("GetForegroundWindow"))
 	for _, w := range enumeratedWindows {
 		pi, ok := ps[w.pid]
 		if !ok {
 			continue
 		}
 		name := strings.TrimSuffix(strings.ToLower(pi.name), ".exe")
-		if w.pid == uint32(os.Getpid()) || strings.Contains(name, "voyager") || strings.Contains(name, "sunshine") || name == "explorer" || name == "dwm" || name == "steamwebhelper" || name == "conhost" {
+		if w.pid == uint32(os.Getpid()) || name=="voyagerlauncher" || name=="sunshine" || name == "explorer" || name == "dwm" || name == "steamwebhelper" || name == "conhost" {
 			continue
 		}
 		newProcess := !o.baseline[w.pid]
-		if newProcess && requested == "" {
-			fallback = append(fallback, w.handle)
-		}
 		score := 0
 		if w.pid == o.launchPID && o.launchPID != 0 {
 			score = 180
@@ -684,7 +682,9 @@ func (o *overlayState) findGameWindow() uintptr {
 			}
 			if newProcess {
 				score += 150
-			} else {
+			} else if w.handle==foreground || w.handle==o.targetHWND {
+ score+=85
+ } else {
 				score += 20
 			}
 		}
@@ -696,7 +696,7 @@ func (o *overlayState) findGameWindow() uintptr {
 			if strings.EqualFold(path, o.mainExe) {
 				score += 85
 			}
-			if o.launchDir != "" && strings.HasPrefix(strings.ToLower(path), strings.ToLower(filepath.Clean(o.launchDir)+string(os.PathSeparator))) {
+			if newProcess && o.launchDir != "" && !strings.EqualFold(filepath.Ext(o.mainExe),".lnk") && strings.HasPrefix(strings.ToLower(path), strings.ToLower(filepath.Clean(o.launchDir)+string(os.PathSeparator))) {
 				score += 55
 			}
 		}
@@ -704,11 +704,6 @@ func (o *overlayState) findGameWindow() uintptr {
 			best = w.handle
 			bestScore = score
 		}
-	}
-	// If a shortcut/Steam launcher detached the real game, prefer a single newly
-	// created visible window rather than accidentally tracking an existing app.
-	if best == 0 && len(fallback) == 1 && time.Since(o.started) > 1200*time.Millisecond {
-		return fallback[0]
 	}
 	return best
 }
@@ -732,7 +727,7 @@ func (o *overlayState) tick() {
 		return
 	}
 	// Refresh the floating Cartridge even when the loading percentage is unchanged.
-	if o.cartridge != nil {
+	if node:=o.layout.Find(ll.Cartridge); node!=nil && node.Visible && appPrefs.AnimateCartridge && o.cartridge != nil {
 		o.invalidateAll()
 	}
 	// Do not call SetWindowPos at every animation frame: this can stall
@@ -794,10 +789,15 @@ func (o *overlayState) tick() {
 	}
 	if now.Sub(o.started) > 120*time.Second {
 		o.fail = "O jogo não apresentou uma janela identificável. Confira o executável ou informe o processo do jogo na aba Execução."
-		o.timeFailed = now
+		o.phase=o.fail;logLaunchFailure(o.id,o.fail)
+ o.timeFailed = now
 		o.percent = 0
 		o.invalidateAll()
 	}
 }
 
 // Registration for JPEG in image.Decode, besides PNG and GIF.
+
+func logLaunchFailure(id,message string){
+ data:=fmt.Sprintf("%s %s: %s\n",time.Now().Format(time.RFC3339),id,message);_ =os.WriteFile(filepath.Join(rootDir,"VoyagerLaunch-error.log"),[]byte(data),0600)
+}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+ "strings"
 	"unsafe"
 )
 
@@ -62,7 +63,7 @@ func loadImg(path string) *img {
 		return nil
 	}
 	var h uintptr
-	if call(pGdipLoadImage, ptrStr(path), uintptr(unsafe.Pointer(&h))) != 0 || h == 0 {
+	if call(pGdipLoadImage, uintptr(wide(path)), uintptr(unsafe.Pointer(&h))) != 0 || h == 0 {
 		return nil
 	}
 	var w, hh uint32
@@ -128,7 +129,7 @@ func (p *painter) text(x, y, w, h int, s string, size float32, c palette, bold b
 		return
 	}
 	var family, font, brush uintptr
-	call(pGdipCreateFontFamily, ptrStr("Segoe UI"), 0, uintptr(unsafe.Pointer(&family)))
+	call(pGdipCreateFontFamily, uintptr(wide("Segoe UI")), 0, uintptr(unsafe.Pointer(&family)))
 	if family == 0 {
 		return
 	}
@@ -143,7 +144,7 @@ func (p *painter) text(x, y, w, h int, s string, size float32, c palette, bold b
 		return
 	}
 	call(pGdipCreateSolidFill, uintptr(c), uintptr(unsafe.Pointer(&brush)))
-	t := syscall.StringToUTF16(s)
+	t := syscall.StringToUTF16(strings.ReplaceAll(s,"\x00","�"))
 	rc := rectF{float32(x), float32(y), float32(w), float32(h)}
 	call(pGdipDrawString, p.g, uintptr(unsafe.Pointer(&t[0])), uintptr(len(t)-1), font, uintptr(unsafe.Pointer(&rc)), 0, brush)
 	call(pGdipDeleteBrush, brush)
@@ -202,7 +203,7 @@ func savePNG(bmp uintptr, dest string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
-	rc := call(pGdipSaveImage, bmp, ptrStr(dest), uintptr(unsafe.Pointer(&encoder)), 0)
+	rc := call(pGdipSaveImage, bmp, uintptr(wide(dest)), uintptr(unsafe.Pointer(&encoder)), 0)
 	if rc != 0 {
 		return fmt.Errorf("falha ao gravar PNG: status %d", rc)
 	}

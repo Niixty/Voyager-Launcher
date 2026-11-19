@@ -5,10 +5,12 @@ import (
  "fmt"
  "io"
  "os"
- "path/filepath"
+ "voyager/native/internal/jsonstore"
 )
 
 type Config struct {
+ InterfaceFont string `json:"interfaceFont,omitempty"`
+ AnimateCartridge bool `json:"animateCartridge"`
  Theme string `json:"theme"`
  ShowPercentage bool `json:"showPercentage"`
  ShowDescription bool `json:"showDescription"`
@@ -31,7 +33,7 @@ var Presets = []Preset{
 }
 
 func Default() Config {
- return Config{Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78,PostOpenSeconds:1}
+ return Config{InterfaceFont:"Segoe UI",AnimateCartridge:true,Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78,PostOpenSeconds:1}
 }
 func ValidTheme(id string) bool {
  for _,p:=range Presets {if p.ID==id{return true}}
@@ -45,6 +47,7 @@ func (c Config) Accent() uint32 {return PresetFor(c.Theme).Accent}
 func (c Config) DarkAccent() uint32 {return PresetFor(c.Theme).Dark}
 func (c Config) AccentHex() string {return fmt.Sprintf("#%08X",c.Accent())}
 func (c Config) Normalize() Config {
+ switch c.InterfaceFont{case "Segoe UI","Arial","Tahoma","Verdana":default:c.InterfaceFont="Segoe UI"}
  if !ValidTheme(c.Theme) {c.Theme="cinza"}
  if c.BackgroundDim<30||c.BackgroundDim>95 {c.BackgroundDim=78}
  if c.PostOpenSeconds<1||c.PostOpenSeconds>15 {c.PostOpenSeconds=1}
@@ -53,39 +56,21 @@ func (c Config) Normalize() Config {
 
 // Load overlays present fields on defaults, leaving backward-compatible booleans.
 func Load(path string) Config {
- c:=Default()
- f,err:=os.Open(path)
- if err!=nil{return c}
- defer f.Close()
- b,err:=io.ReadAll(io.LimitReader(f,64*1024))
- if err!=nil||len(b)>=64*1024{return c}
- if err=json.Unmarshal(b,&c);err!=nil{return Default()}
- return c.Normalize()
+ for _,name:=range []string{path,path+".backup"}{
+   f,err:=os.Open(name);if err!=nil{continue};b,err:=io.ReadAll(io.LimitReader(f,64*1024));f.Close()
+   c:=Default();if err==nil && len(b)<64*1024 && json.Unmarshal(b,&c)==nil{return c.Normalize()}
+ }
+ return Default()
 }
 
 // Save preserves a backup until the new file is safely renamed.
 func Save(path string,c Config) error {
  c=c.Normalize()
- dir:=filepath.Dir(path)
- if err:=os.MkdirAll(dir,0755);err!=nil{return err}
- b,err:=json.MarshalIndent(c,"","  ")
- if err!=nil{return err}
- tmp,err:=os.CreateTemp(dir,"settings-*.tmp")
- if err!=nil{return err}
- tempName:=tmp.Name()
- defer os.Remove(tempName)
- if _,err=tmp.Write(append(b,'\n'));err!=nil {tmp.Close();return err}
- if err=tmp.Close();err!=nil{return err}
- if _,err=os.Stat(path);err==nil{
-  backup:=path+".backup"
-  _=os.Remove(backup)
-  if err=os.Rename(path,backup);err!=nil{return err}
-  if err=os.Rename(tempName,path);err!=nil{
-   _=os.Rename(backup,path)
-   return err
-  }
-  _=os.Remove(backup)
-  return nil
- }
- return os.Rename(tempName,path)
+ data,err:=json.Marshal(c);if err!=nil{return err}
+ var current map[string]json.RawMessage
+ if previous,err:=os.ReadFile(path);err==nil{_ = json.Unmarshal(previous,&current)}
+ if current==nil{current=map[string]json.RawMessage{}}
+ var typed map[string]json.RawMessage
+ if err=json.Unmarshal(data,&typed);err!=nil{return err};for k,v:=range typed{current[k]=v}
+ data,err=json.MarshalIndent(current,"","  ");if err!=nil{return err};return jsonstore.Write(path,append(data,'\n'))
 }

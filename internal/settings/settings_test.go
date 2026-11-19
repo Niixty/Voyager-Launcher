@@ -28,7 +28,9 @@ func TestSaveAndLoad(t *testing.T){
  if err:=os.WriteFile(p,[]byte("{\"theme\":\"invalid\",\"backgroundDim\":100}"),0600);err!=nil {t.Fatal(err)}
  if got=Load(p);got.Theme!="cinza"||got.BackgroundDim!=78||got.PostOpenSeconds!=1||!got.ShowPercentage {t.Fatalf("invalid defaults: %+v",got)}
  if err:=os.WriteFile(p,[]byte("invalid"),0600);err!=nil {t.Fatal(err)}
- if Load(p).Theme!="cinza" {t.Fatal("invalid json")}
+ if Load(p).Theme!="roxo" {t.Fatal("invalid JSON should recover the previous saved theme")}
+ if err:=os.Remove(p+".backup");err!=nil{t.Fatal(err)}
+ if Load(p).Theme!="cinza"{t.Fatal("invalid JSON without backup should use defaults")}
 }
 
 func TestPostOpenSecondsValidation(t *testing.T){

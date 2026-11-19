@@ -41,27 +41,38 @@ try {
         if ($hash -ne ([string]$asset.digest).Substring(7).ToLowerInvariant()) { throw "SHA-256 invalido para $nome. Nenhum arquivo instalado." }
     }
     New-Item -ItemType Directory -Path $Destino -Force | Out-Null
-    # Salva copia dos executaveis antigos antes de substituir; nunca toca em Games.
-    foreach ($nome in $nomes) {
-        $destExe = Join-Path $Destino $nome
-        if (Test-Path -LiteralPath $destExe) {
-            Copy-Item -LiteralPath $destExe -Destination ($destExe + '.backup') -Force
-        }
-    }
-    $copiados = @()
+    $lock = [IO.File]::Open((Join-Path $Destino '.voyager-update.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+    $installed = @()
     try {
         foreach ($nome in $nomes) {
-            Copy-Item -LiteralPath (Join-Path $temp $nome) -Destination (Join-Path $Destino $nome) -Force
-            $copiados += $nome
-        }
-    } catch {
-        foreach ($nome in $copiados) {
-            $anterior = Join-Path $Destino ($nome + '.backup')
-            if (Test-Path -LiteralPath $anterior) {
-                Copy-Item -LiteralPath $anterior -Destination (Join-Path $Destino $nome) -Force -ErrorAction SilentlyContinue
+            $target = Join-Path $Destino $nome
+            $staged = Join-Path $Destino ([Guid]::NewGuid().ToString('N') + '.tmp')
+            try {
+                [IO.File]::Copy((Join-Path $temp $nome), $staged)
+                $previous = [IO.File]::Exists($target)
+                if ($previous) {
+                    [IO.File]::Replace($staged, $target, ($target + '.backup'))
+                } else {
+                    [IO.File]::Move($staged, $target)
+                }
+                $installed += @{ Path = $target; Previous = $previous }
+            } finally {
+                [IO.File]::Delete($staged)
             }
         }
-        throw "Nao foi possivel instalar todos os arquivos. Feche o Voyager e tente de novo. Detalhes: $($_.Exception.Message)"
+    } catch {
+        $failure = $_
+        [array]::Reverse($installed)
+        foreach ($item in $installed) {
+            if ($item.Previous) {
+                [IO.File]::Replace(($item.Path + '.backup'), $item.Path, $null)
+            } else {
+                [IO.File]::Delete($item.Path)
+            }
+        }
+        throw "Instalacao interrompida. Feche o Voyager e tente novamente. $failure"
+    } finally {
+        $lock.Dispose()
     }
     Write-Host "Instalacao concluida: $Destino" -ForegroundColor Green
     Write-Host "Versao: $($release.tag_name)" -ForegroundColor Green

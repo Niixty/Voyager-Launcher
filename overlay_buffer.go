@@ -99,6 +99,9 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int) {
             if staticDC!=0{call(pSelectObject,staticDC,staticPrevious);call(pDeleteObject,staticBmp);call(pDeleteDC,staticDC)}
         }
     }
+    if b!=nil && o.cartOverlapsForeground() {
+        p:=paintFromHDC(b.dc);drawOverlay(p,o.cfg,0,0,width,height,o.percent,o.phase,o.detail,o.cartridge,o.background,o.accent,o.cartridgeOffset(),o.layout,o.fail!="");p.close();call(pBitBlt,windowDC,0,0,uintptr(width),uintptr(height),b.dc,0,0,0x00CC0020);return
+    }
     if b==nil {
         // If allocation fails, keep the full-loading behavior functional.
         p:=paintFromHDC(windowDC)
@@ -131,4 +134,12 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int) {
         p.close()
     }
     call(pBitBlt,windowDC,0,0,uintptr(width),uintptr(height),b.dc,0,0,SRCCOPY)
+}
+
+// Cache the usual disjoint layout. When a later layer crosses the floating cart,
+// compose in document order so the editor, screenshot and stream agree.
+func(o *overlayState) cartOverlapsForeground()bool{
+ var cart *ll.Element
+ for i:=range o.layout.Elements{n:=&o.layout.Elements[i];if n.ID==ll.Cartridge{if !n.Visible||o.cartridge==nil{return false};cart=n;continue};if cart!=nil && (n.Visible||o.fail!=""&&n.ID==ll.Phase) && n.X<cart.X+cart.W && n.X+n.W>cart.X && n.Y<cart.Y+cart.H+11 && n.Y+n.H>cart.Y-11{return true}}
+ return false
 }

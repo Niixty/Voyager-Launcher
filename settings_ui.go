@@ -70,7 +70,7 @@ func (m *managerState) settingsAction(key string) bool {
  case "prefreset":
   m.changeAppPrefs(func(c *settings.Config){*c=settings.Default()})
  case "prefopenapp":
-  call(pShellExecute,m.hwnd,ptrStr("open"),ptrStr(rootDir),0,0,SW_SHOWNORMAL)
+  call(pShellExecute,m.hwnd,uintptr(wide("open")),uintptr(wide(rootDir)),0,0,SW_SHOWNORMAL)
  case "prefcheck":
   m.status="Consultando a última versão no GitHub..."
   invalid(m.hwnd)

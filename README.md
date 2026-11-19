@@ -2,6 +2,18 @@
 
 Este projeto mostra uma tela de carregamento no Windows enquanto o jogo iniciado via Sunshine abre. O Moonlight transmite essa tela.
 
+## Gerenciador desktop
+
+Abra `VoyagerLauncher.exe` para usar a biblioteca em Wails com WebView2. A interface HTML, CSS e JavaScript vem embutida no executável e funciona offline. As chamadas do frontend usam a ponte local do Wails. O overlay de `--game` e o print de `--preview` continuam no Win32/GDI+. `--classic` abre o gerenciador anterior. Ele também é a alternativa para um Windows sem WebView2.
+
+Na Biblioteca, busque por título, plataforma ou ID. Abra um jogo para editar sua execução, conferir imagens, testar ou copiar o comando do Sunshine. Ao arquivar, a pasta inteira vai para `Games-archive` ao lado de `Games`; mova-a de volta para recuperar o jogo. No editor, use o seletor de camadas para alcançar elementos sobrepostos. Os campos numéricos usam a tela virtual de 1600 × 900. Salve antes de usar o print em 50%.
+
+**Herança de layout.** O layout individual tem prioridade sobre `loading_default.json`. Sem nenhum deles, vale o de fábrica. “Padrão para todos os jogos” guarda os layouts individuais em arquivos `.before_global_…json` antes de passar os jogos para a herança. “Padrão para jogos sem layout próprio” preserva as personalizações.
+
+**Testar a versão do PR.** Faça uma cópia da sua pasta `app` em outro local. Feche o Voyager, extraia os dois executáveis do artefato `Voyager-Windows-x64` nessa cópia e abra o launcher. A versão preview mantém a atualização automática pausada. Para testar via Sunshine, crie um aplicativo temporário com o comando mostrado nessa cópia. Para voltar, abra a instalação anterior. O instalador normal continua buscando a release estável.
+
+**Desenvolvimento.** Use Go 1.23, `go test -vet=off ./...` no Windows e `go build -tags production,native_webview2loader -ldflags "-H windowsgui" -o dist/VoyagerLauncher.exe .`. Compile o helper com `go build -ldflags "-H windowsgui" -o dist/VoyagerUpdater.exe ./cmd/updater`. Os testes de interface no workflow usam uma instalação temporária e dados fictícios.
+
 ## Estrutura da pasta
 
 - `*.go`, `cmd/`: codigo-fonte do aplicativo e atualizador.
@@ -96,7 +108,7 @@ A aba **EDITOR** mostra uma tela de loading em miniatura e permite mover e dimen
 Clique num elemento para selecionar, arraste para reposicionar e arraste os cantos para redimensionar. A roda do mouse ajusta o tamanho do elemento selecionado. Atalhos: setas (1 px), Shift+setas (10 px), Delete (mostrar/ocultar), Ctrl+Z/Ctrl+Y (desfazer/refazer).
 Ha grade, snap de 10 px, alinhamento a esquerda/centro/direita/topo/meio/base, ajuste da fonte, opcoes de cores e camadas, restaurar um elemento ou o layout todo, e print de 50%.
 
-**O layout e individual por jogo**, salvo automaticamente em `app/Games/<ID>/loading_layout.json`, sem modificar `config.json` e sem publicar dados pessoais no Git. Esse JSON e carregado tanto pelo loading real quanto pelo PRINT 50%. Jogos antigos sem arquivo de layout usam as posicoes originais automaticamente. Os elementos editaveis sao Cartridge, plataforma, titulo, descricao, mensagem de loading, porcentagem, barra de progresso e etapa. O tema da interface nao interfere na cor da barra: ela continua usando a cor extraida do Hero.
+**No editor clássico, o layout é individual por jogo**, salvo automaticamente em `app/Games/<ID>/loading_layout.json`, sem modificar `config.json` e sem publicar dados pessoais no Git. Esse JSON e carregado tanto pelo loading real quanto pelo PRINT 50%. Jogos sem layout individual herdam o padrão global ou, na ausência dele, as posições de fábrica. Os elementos editaveis sao Cartridge, plataforma, titulo, descricao, mensagem de loading, porcentagem, barra de progresso e etapa. O tema da interface nao interfere na cor da barra: ela continua usando a cor extraida do Hero.
 
 ## Layout padrao compartilhado e correção de flicker
 
@@ -111,3 +123,15 @@ Em **AJUSTES → Tempo após abrir o jogo** você pode usar os atalhos de **1 s*
 
 A animação do Cartridge agora solicita quadros a cada 16 ms (aproximadamente 60 FPS, sujeito ao agendamento do Windows) e usa uma oscilação senoidal suave de 11 px em 2,9 segundos. O conteúdo estático de cada monitor — Hero, textos, barras e status — é guardado em uma superfície gráfica reutilizável, recalculado apenas quando os dados mudam. Durante a animação, o programa repõe essa superfície e desenha somente o Cartridge, reduzindo o custo e evitando travamentos associados a redesenhar toda a tela.
 O reposicionamento forçado da janela sempre-no-topo também foi reduzido para no máximo uma vez a cada 250 ms.
+
+### Pontos encontrados durante a modernização
+
+| Prioridade | Comportamento anterior | Tratamento na branch |
+| --- | --- | --- |
+| Alta | A tarefa agendada e o gerenciador compartilhavam os mesmos arquivos temporários. O helper movia o EXE atual antes de conferir a existência do próximo. | Bloqueio por instalação, arquivo temporário exclusivo, SHA-256 conferido novamente no helper, backup e substituição no mesmo volume. |
+| Alta | O salvamento podia sobrescrever JSON ilegível e trocar referências de arte personalizadas. | O editor preserva campos adicionais e caminhos de arte. A gravação usa temporário e backup. O cadastro recusa um ID existente. |
+| Alta | Uma janela nova sem relação com o jogo podia encerrar o loading. | Execução por atalho solicita o processo ao shell. A detecção considera processo, descendência, caminho ou nome esperado. Launchers que reutilizam outro processo podem exigir “Processo esperado”. |
+| Média | A composição em cache desenhava o cartucho sobre elementos que o editor colocava à frente. | O renderer conserva a ordem do documento quando elementos se sobrepõem. O editor usa camadas nativas em cache para animar o cartucho. |
+| Média | Controles em coordenadas fixas dificultavam o uso do gerenciador em janelas pequenas. | Biblioteca, formulários e editor em HTML responsivo. O renderer de tela cheia mantém as coordenadas virtuais dos layouts existentes. |
+
+O log da instalação indicava que o arquivo preparado estava ausente. Ele não identifica qual processo o removeu. Os testes de recuperação reproduzem essa condição e conferem o conteúdo do executável e do backup.
