@@ -12,7 +12,7 @@ Na Biblioteca, busque por título, plataforma ou ID. Abra um jogo para editar su
 
 **Testar a versão do PR.** Faça uma cópia da sua pasta `app` em outro local. Feche o Voyager, extraia os dois executáveis do artefato `Voyager-Windows-x64` nessa cópia e abra o launcher. A versão preview mantém a atualização automática pausada. Para testar via Sunshine, crie um aplicativo temporário com o comando mostrado nessa cópia. Para voltar, abra a instalação anterior. O instalador normal continua buscando a release estável.
 
-**Desenvolvimento.** Use Go 1.23, `go test -vet=off ./...` no Windows e `go build -tags production -ldflags "-H windowsgui" -o dist/VoyagerLauncher.exe .`. Compile o helper com `go build -ldflags "-H windowsgui" -o dist/VoyagerUpdater.exe ./cmd/updater`. Os testes de interface no workflow usam uma instalação temporária e dados fictícios.
+**Desenvolvimento.** Use Go 1.23, `go test -vet=off ./...` no Windows e `go build -tags production,native_webview2loader -ldflags "-H windowsgui" -o dist/VoyagerLauncher.exe .`. Compile o helper com `go build -ldflags "-H windowsgui" -o dist/VoyagerUpdater.exe ./cmd/updater`. Os testes de interface no workflow usam uma instalação temporária e dados fictícios.
 
 ## Estrutura da pasta
 

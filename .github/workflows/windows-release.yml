@@ -49,12 +49,15 @@ jobs:
           # Cada commit no main ganha sua propria versao sem criar tags manualmente.
           $version = '0.9.0-preview'
           if ('${{ github.ref }}' -eq 'refs/heads/main') { $version = '0.9.${{ github.run_number }}' }
-          go build -tags production -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version" -o dist/VoyagerLauncher.exe .
+          go build -tags production,native_webview2loader -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version" -o dist/VoyagerLauncher.exe .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go build -tags production -trimpath -ldflags '-H windowsgui -s -w' -o dist/VoyagerUpdater.exe ./cmd/updater
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Get-FileHash dist/VoyagerLauncher.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerLauncher.exe' | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
           (Get-FileHash dist/VoyagerUpdater.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerUpdater.exe' | Add-Content -Path dist/SHA256SUMS.txt -Encoding ascii
+      - name: Testar loading de executável e atalho
+        shell: pwsh
+        run: ./tools/tests/overlay-smoke.ps1
       - name: Preparar runtime WebView2 no runner
         shell: pwsh
         run: |

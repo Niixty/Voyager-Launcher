@@ -426,6 +426,15 @@ async function prefs() {
     c.theme,
   );
   fields.append(field("Cor de destaque", theme));
+  const font = options(
+    ["Segoe UI", "Arial", "Tahoma", "Verdana"].map((n) => [n, n]),
+    c.interfaceFont || "Segoe UI",
+  );
+  fields.append(field("Tipografia da interface", font));
+  font.onchange = () => {
+    c.interfaceFont = font.value;
+    dirty = true;
+  };
   theme.onchange = () => {
     c.theme = theme.value;
     dirty = true;
@@ -466,6 +475,7 @@ async function prefs() {
         await api.SavePrefs(c);
         dirty = false;
         document.documentElement.style.setProperty("--accent", themes[c.theme]);
+        document.body.style.fontFamily = c.interfaceFont || "Segoe UI";
         note("Preferências salvas");
       },
       "primary",
@@ -506,6 +516,7 @@ $("prefs").onclick = () => {
 safe(async () => {
   const c = await api.Prefs();
   document.documentElement.style.setProperty("--accent", themes[c.theme]);
+  document.body.style.fontFamily = c.interfaceFont || "Segoe UI";
   $("version").textContent = "Voyager " + (await api.Version());
   await library();
 });

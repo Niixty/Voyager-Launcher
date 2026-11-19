@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+ InterfaceFont string `json:"interfaceFont,omitempty"`
  AnimateCartridge bool `json:"animateCartridge"`
  Theme string `json:"theme"`
  ShowPercentage bool `json:"showPercentage"`
@@ -32,7 +33,7 @@ var Presets = []Preset{
 }
 
 func Default() Config {
- return Config{AnimateCartridge:true,Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78,PostOpenSeconds:1}
+ return Config{InterfaceFont:"Segoe UI",AnimateCartridge:true,Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78,PostOpenSeconds:1}
 }
 func ValidTheme(id string) bool {
  for _,p:=range Presets {if p.ID==id{return true}}
@@ -46,6 +47,7 @@ func (c Config) Accent() uint32 {return PresetFor(c.Theme).Accent}
 func (c Config) DarkAccent() uint32 {return PresetFor(c.Theme).Dark}
 func (c Config) AccentHex() string {return fmt.Sprintf("#%08X",c.Accent())}
 func (c Config) Normalize() Config {
+ switch c.InterfaceFont{case "Segoe UI","Arial","Tahoma","Verdana":default:c.InterfaceFont="Segoe UI"}
  if !ValidTheme(c.Theme) {c.Theme="cinza"}
  if c.BackgroundDim<30||c.BackgroundDim>95 {c.BackgroundDim=78}
  if c.PostOpenSeconds<1||c.PostOpenSeconds>15 {c.PostOpenSeconds=1}

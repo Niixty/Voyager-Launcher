@@ -164,6 +164,10 @@ func copyNew(src, dest string) error {
 		return errors.New("ID inválido")
 	}
 	games := filepath.Join(rootDir, "Games")
+	rel, e := filepath.Rel(src, games)
+	if e == nil && (rel == "." || filepath.IsLocal(rel)) {
+		return errors.New("a pasta de origem contém a biblioteca de destino")
+	}
 	tmp, e := os.MkdirTemp(games, ".import-")
 	if e != nil {
 		return e
@@ -377,6 +381,9 @@ func (s *Studio) Diagnose() []string {
 	}
 	if b, e := os.ReadFile(filepath.Join(rootDir, "VoyagerUpdater-error.log")); e == nil {
 		lines = append(lines, "Último erro do atualizador: "+string(b))
+	}
+	if b, e := os.ReadFile(filepath.Join(rootDir, "VoyagerLaunch-error.log")); e == nil {
+		lines = append(lines, "Última falha de execução: "+string(b))
 	}
 	return lines
 }

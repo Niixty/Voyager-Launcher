@@ -130,7 +130,7 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
     D:=func(v float64)int{return int(math.Max(1,math.Round(v*s)))}
     if heroColor==0 {heroColor=heroaccent.Neutral}
     if phase==""{phase="Preparando o jogo"}
-    if failed{phase=detail}
+    if failed && detail!="" {phase=detail}
     description:=[]rune(c.Description)
     if len(description)>270{description=description[:270]}
     for _,n:=range layout.Elements {
@@ -442,6 +442,7 @@ func (o *overlayState) run() error {
 		o.fail = err.Error()
 		o.timeFailed = time.Now()
 		o.phase = o.fail
+ logLaunchFailure(o.id,o.fail)
 		o.invalidateAll()
 	}
 	// Request ~60 FPS while the loading is active; Windows may coalesce ticks.
@@ -664,7 +665,7 @@ func (o *overlayState) findGameWindow() uintptr {
 			continue
 		}
 		name := strings.TrimSuffix(strings.ToLower(pi.name), ".exe")
-		if w.pid == uint32(os.Getpid()) || strings.Contains(name, "voyager") || strings.Contains(name, "sunshine") || name == "explorer" || name == "dwm" || name == "steamwebhelper" || name == "conhost" {
+		if w.pid == uint32(os.Getpid()) || name=="voyagerlauncher" || name=="sunshine" || name == "explorer" || name == "dwm" || name == "steamwebhelper" || name == "conhost" {
 			continue
 		}
 		newProcess := !o.baseline[w.pid]
@@ -786,10 +787,15 @@ func (o *overlayState) tick() {
 	}
 	if now.Sub(o.started) > 120*time.Second {
 		o.fail = "O jogo não apresentou uma janela identificável. Confira o executável ou informe o processo do jogo na aba Execução."
-		o.timeFailed = now
+		o.phase=o.fail;logLaunchFailure(o.id,o.fail)
+ o.timeFailed = now
 		o.percent = 0
 		o.invalidateAll()
 	}
 }
 
 // Registration for JPEG in image.Decode, besides PNG and GIF.
+
+func logLaunchFailure(id,message string){
+ data:=fmt.Sprintf("%s %s: %s\n",time.Now().Format(time.RFC3339),id,message);_ =os.WriteFile(filepath.Join(rootDir,"VoyagerLaunch-error.log"),[]byte(data),0600)
+}
