@@ -3,7 +3,6 @@ const api = window.go.main.Studio,
   main = document.querySelector("main");
 const $ = (id) => document.getElementById(id);
 let games = [],
-  selected,
   query = "",
   list = false,
   sort = "title",
@@ -148,6 +147,38 @@ async function library() {
           el("small", g.Problem ? "Configuração inválida" : g.Config.platform),
         ),
       );
+      b.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        if (g.Problem) return;
+        document.querySelector(".game-menu")?.remove();
+        const menu = el("div", null, "game-menu");
+        menu.setAttribute("popover", "auto");
+        for (const [text, fn] of [
+          ["Testar jogo", () => api.Run(g.ID, "--game")],
+          ["Editar jogo", () => form(g)],
+          ["Editor de loading", () => detail(g, "Editor de loading")],
+        ])
+          menu.append(
+            btn(text, () => {
+              menu.hidePopover();
+              return fn();
+            }),
+          );
+        menu.ontoggle = () => {
+          if (!menu.matches(":popover-open")) menu.remove();
+        };
+        document.body.append(menu);
+        menu.showPopover();
+        menu.style.left =
+          Math.max(0, Math.min(ev.clientX, innerWidth - menu.offsetWidth - 8)) +
+          "px";
+        menu.style.top =
+          Math.max(
+            0,
+            Math.min(ev.clientY, innerHeight - menu.offsetHeight - 8),
+          ) + "px";
+        menu.querySelector("button").focus();
+      };
       cards.append(b);
     }
     if (!rows.length)
@@ -172,12 +203,20 @@ async function library() {
   paint();
 }
 function detail(g, section = "Resumo") {
-  selected = g;
   clear("lib");
-  header(
-    g.Config.title,
-    btn("Testar jogo", () => api.Run(g.ID, "--game"), "primary"),
-  );
+  const play = btn("Testar jogo", () => api.Run(g.ID, "--game"), "primary");
+  if (section === "Resumo") {
+    const banner = el("section", null, "detail-banner"),
+      backdrop = image(g.ID, "hero");
+    backdrop.className = "backdrop";
+    banner.append(backdrop);
+    const info = el("div", null, "banner-info");
+    info.append(el("small", g.Config.platform), el("h1", g.Config.title), play);
+    banner.append(info);
+    main.append(banner);
+  } else {
+    header(g.Config.title, play);
+  }
   const tabs = row();
   tabs.classList.add("tabs");
   for (const name of ["Resumo", "Imagens", "Editor de loading", "Sunshine"]) {
@@ -270,13 +309,7 @@ function detail(g, section = "Resumo") {
     });
     return;
   }
-  const hero = el("div", null, "hero"),
-    im = image(g.ID, "hero");
-  im.onerror = () => hero.remove();
-  hero.append(im);
   main.append(
-    hero,
-    el("small", g.Config.platform),
     el("p", g.Config.description || ""),
     row(
       btn("Editar jogo", () => form(g)),

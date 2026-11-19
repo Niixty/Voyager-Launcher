@@ -123,3 +123,15 @@ Em **AJUSTES → Tempo após abrir o jogo** você pode usar os atalhos de **1 s*
 
 A animação do Cartridge agora solicita quadros a cada 16 ms (aproximadamente 60 FPS, sujeito ao agendamento do Windows) e usa uma oscilação senoidal suave de 11 px em 2,9 segundos. O conteúdo estático de cada monitor — Hero, textos, barras e status — é guardado em uma superfície gráfica reutilizável, recalculado apenas quando os dados mudam. Durante a animação, o programa repõe essa superfície e desenha somente o Cartridge, reduzindo o custo e evitando travamentos associados a redesenhar toda a tela.
 O reposicionamento forçado da janela sempre-no-topo também foi reduzido para no máximo uma vez a cada 250 ms.
+
+### Pontos encontrados durante a modernização
+
+| Prioridade | Comportamento anterior | Tratamento na branch |
+| --- | --- | --- |
+| Alta | A tarefa agendada e o gerenciador compartilhavam os mesmos arquivos temporários. O helper movia o EXE atual antes de conferir a existência do próximo. | Bloqueio por instalação, arquivo temporário exclusivo, SHA-256 conferido novamente no helper, backup e substituição no mesmo volume. |
+| Alta | O salvamento podia sobrescrever JSON ilegível e trocar referências de arte personalizadas. | O editor preserva campos adicionais e caminhos de arte. A gravação usa temporário e backup. O cadastro recusa um ID existente. |
+| Alta | Uma janela nova sem relação com o jogo podia encerrar o loading. | Execução por atalho solicita o processo ao shell. A detecção considera processo, descendência, caminho ou nome esperado. Launchers que reutilizam outro processo podem exigir “Processo esperado”. |
+| Média | A composição em cache desenhava o cartucho sobre elementos que o editor colocava à frente. | O renderer conserva a ordem do documento quando elementos se sobrepõem. O editor usa camadas nativas em cache para animar o cartucho. |
+| Média | Controles em coordenadas fixas dificultavam o uso do gerenciador em janelas pequenas. | Biblioteca, formulários e editor em HTML responsivo. O renderer de tela cheia mantém as coordenadas virtuais dos layouts existentes. |
+
+O log da instalação indicava que o arquivo preparado estava ausente. Ele não identifica qual processo o removeu. Os testes de recuperação reproduzem essa condição e conferem o conteúdo do executável e do backup.

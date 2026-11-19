@@ -361,3 +361,56 @@ pre {
   width: 100%;
   height: 100%;
 }
+.detail-banner {
+  min-height: 225px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: flex;
+  align-items: end;
+  background: #252932;
+}
+.detail-banner .backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+.detail-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #101218f0, #1012189c 54%, #10121819);
+  z-index: -1;
+}
+.banner-info {
+  padding: clamp(20px, 3vw, 44px);
+  max-width: 78%;
+}
+.banner-info small {
+  color: #d6dbe4;
+}
+.banner-info h1 {
+  margin: 0.15em 0 0.42em;
+}
+.game-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 5px;
+  color: inherit;
+  box-shadow: 0 8px 28px #0008;
+}
+.game-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  text-align: left;
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/base64"
@@ -24,6 +25,9 @@ import (
 	ll "voyager/native/internal/loadinglayout"
 	"voyager/native/internal/settings"
 )
+
+//go:embed app/assets/VoyagerLauncher.ico
+var brandIcon []byte
 
 //go:embed desktop/*
 var web embed.FS
@@ -60,6 +64,11 @@ func studioOptions(s *Studio, assets fs.FS) *options.App {
 }
 func artKind(k string) bool { return k == "hero" || k == "grid" || k == "cartridge" }
 func serveArtwork(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/icon.ico" {
+		w.Header().Set("Content-Type", "image/x-icon")
+		http.ServeContent(w, r, "icon.ico", time.Time{}, bytes.NewReader(brandIcon))
+		return
+	}
 	p := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(p) != 3 || p[0] != "art" || !validID.MatchString(p[1]) || !artKind(p[2]) {
 		http.NotFound(w, r)
