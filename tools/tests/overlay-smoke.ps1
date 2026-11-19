@@ -44,6 +44,18 @@ public class FixtureGame {
         Write-Host "$mode - janela detectada; overlay encerrado apos $age s"
         Get-Process FixtureGame -ErrorAction SilentlyContinue | Where-Object Path -eq $game | Stop-Process -Force
     }
+    # The ten-second preview must not start any configured executable.
+    Remove-Item (Join-Path $dir 'ready') -ErrorAction SilentlyContinue
+    $startedAt = Get-Date
+    $preview = Start-Process $launcher -ArgumentList '--test-loading','executavel' -PassThru
+    if (-not $preview.WaitForExit(14000)) {
+        $preview.Kill()
+        throw 'Teste visual do loading nao encerrou em 10 segundos.'
+    }
+    $seconds = ((Get-Date) - $startedAt).TotalSeconds
+    if ($seconds -lt 9 -or $seconds -gt 13.5) { throw "Duracao inesperada do teste: $seconds s" }
+    if (Test-Path (Join-Path $dir 'ready')) { throw 'O teste de loading abriu o jogo!' }
+    Write-Host "Preview do loading encerrado em $seconds s sem iniciar o jogo"
 } finally {
     Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
 }

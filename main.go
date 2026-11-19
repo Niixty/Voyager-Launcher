@@ -53,6 +53,20 @@ func main() {
 		}
 		return
 	}
+	// Open the real fullscreen overlay without launching any game.
+	if len(args) >= 2 && args[0] == "--test-loading" {
+		id := args[1]
+		c, e := readConfig(id)
+		if e != nil {
+			exitLog(e)
+			return
+		}
+		o := &overlayState{cfg: c, id: id, preview: true, testLoading: true}
+		if e = o.run(); e != nil {
+			exitLog(e)
+		}
+		return
+	}
 	if len(args) >= 2 && args[0] == "--preview" {
 		id := args[1]
 		c, e := readConfig(id)

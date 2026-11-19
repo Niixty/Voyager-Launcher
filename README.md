@@ -135,3 +135,7 @@ O reposicionamento forçado da janela sempre-no-topo também foi reduzido para n
 | Média | Controles em coordenadas fixas dificultavam o uso do gerenciador em janelas pequenas. | Biblioteca, formulários e editor em HTML responsivo. O renderer de tela cheia mantém as coordenadas virtuais dos layouts existentes. |
 
 O log da instalação indicava que o arquivo preparado estava ausente. Ele não identifica qual processo o removeu. Os testes de recuperação reproduzem essa condição e conferem o conteúdo do executável e do backup.
+
+### Teste visual de loading (10 segundos)
+
+No editor da tela de loading, clique em **Testar loading (10 s)** ao lado de **Print do layout salvo (50%)**. O aplicativo abre a mesma tela cheia nativa, anima o cartucho e fecha automaticamente após dez segundos, sem iniciar o jogo nem procurar seus processos. A prévia usa o layout salvo do jogo; salve as mudanças do editor antes de testar. Também pode ser acionada com `VoyagerLauncher.exe --test-loading ID_DO_JOGO`.

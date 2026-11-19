@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -33,7 +34,9 @@ func loadOverlayTheme() {
 type overlayState struct {
 	cfg                                gameConfig
 	id                                 string
-	preview                            bool
+	preview, testLoading               bool
+	frameStop                          chan struct{}
+	framePending                       atomic.Bool
 	windows                            []uintptr
 	cartridge, background              *img
 	accent                             uint32
@@ -72,6 +75,11 @@ var enumGameWindowCallback = syscall.NewCallback(func(hwnd, param uintptr) uintp
 	}
 	return 1
 })
+const (
+	wmVoyagerFrame = 0x8002
+	loadingTestDuration = 10 * time.Second
+)
+
 var overlayClassName = syscall.StringToUTF16Ptr("VoyagerLoadingNativeV6")
 
 func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
@@ -85,6 +93,12 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 			overlay.paintBuffered(hwnd,hdc,int(rc.w()),int(rc.h()),ps.RcPaint)
 		}
 		call(pEndPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
+		return 0
+	case wmVoyagerFrame:
+		if overlay != nil && len(overlay.windows) > 0 && hwnd == overlay.windows[0] {
+			overlay.framePending.Store(false)
+			overlay.invalidateMotion()
+		}
 		return 0
 	case WM_TIMER:
 		if overlay != nil && len(overlay.windows) > 0 && hwnd == overlay.windows[0] {
@@ -381,6 +395,10 @@ func (o *overlayState) stop() {
 		call(pDestroyWindow, hwnd)
 	}
 	call(pKillTimer, o.windows[0], 1)
+	if o.frameStop != nil {
+		close(o.frameStop)
+		o.frameStop = nil
+	}
 	call(pDestroyWindow, o.windows[0])
 	o.windows = nil
 }
@@ -389,10 +407,46 @@ func (o *overlayState) invalidateAll() {
 		invalid(h)
 	}
 }
+// Drive motion with a monotonic 60Hz clock instead of a coalesced WM_TIMER.
+// At most one pending frame is queued, so slow painting drops work instead
+// of accumulating latency.
+func (o *overlayState) startFrameClock() {
+	if !appPrefs.AnimateCartridge || o.cartridge == nil {
+		return
+	}
+	n := o.layout.Find(ll.Cartridge)
+	if n == nil || !n.Visible {
+		return
+	}
+	o.frameStop = make(chan struct{})
+	stop := o.frameStop
+	hwnd := o.windows[0]
+	go func() {
+		ticker := time.NewTicker(time.Second / 60)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				if !o.framePending.Swap(true) {
+					if call(pPostMessage, hwnd, wmVoyagerFrame, 0, 0) == 0 {
+						o.framePending.Store(false)
+					}
+				}
+			}
+		}
+	}()
+}
+
 func (o *overlayState) run() error {
 	o.layout,_ = loadEffectiveLoadingLayout(o.id)
 	overlay = o
 	defer func() {
+		if o.frameStop != nil {
+			close(o.frameStop)
+			o.frameStop = nil
+		}
 		o.freeBuffers()
 		overlay = nil
 		if o.cartridge != nil {
@@ -435,25 +489,27 @@ func (o *overlayState) run() error {
 		return winError("não foi possível criar tela cheia")
 	}
 	o.started = time.Now()
-	o.percent = 5
-	o.phase = "Verificando arquivos do jogo"
-	o.baseline = snapshotPIDs()
-	o.invalidateAll()
-	if err := o.startGame(); err != nil {
-		o.fail = err.Error()
-		o.timeFailed = time.Now()
-		o.phase = o.fail
- logLaunchFailure(o.id,o.fail)
+	o.percent = 50
+	if o.testLoading {
+		o.phase = "Teste do loading (sem iniciar o jogo)"
+	} else {
+		o.percent = 5
+		o.phase = "Verificando arquivos do jogo"
+		o.baseline = snapshotPIDs()
 		o.invalidateAll()
+		if err := o.startGame(); err != nil {
+			o.fail = err.Error()
+			o.timeFailed = time.Now()
+			o.phase = o.fail
+			logLaunchFailure(o.id, o.fail)
+			o.invalidateAll()
+		}
 	}
-	// Request ~60 FPS while the loading is active; Windows may coalesce ticks.
-	// Detection stays throttled separately at ~160ms.
-	interval:=uintptr(16);if n:=o.layout.Find(ll.Cartridge);!appPrefs.AnimateCartridge||o.cartridge==nil||n==nil||!n.Visible{interval=50}
-    if interval==16 {
-        clock:=syscall.NewLazyDLL("winmm.dll")
-        if call(clock.NewProc("timeBeginPeriod"),1)==0 {defer call(clock.NewProc("timeEndPeriod"),1)}
-    }
-    call(pSetTimer,o.windows[0],1,interval,0)
+	// The first UpdateWindow happens before test state is initialized.
+	o.invalidateAll()
+	// Detect the game and handle the fade separately from the animation.
+	call(pSetTimer, o.windows[0], 1, 50, 0)
+	o.startFrameClock()
 	windowsLoop()
 	return nil
 }
@@ -715,6 +771,12 @@ func (o *overlayState) findGameWindow() uintptr {
 }
 func (o *overlayState) tick() {
 	now := time.Now()
+	if o.testLoading {
+		if now.Sub(o.started) >= loadingTestDuration {
+			o.stop()
+		}
+		return
+	}
 	if o.fail != "" {
 		if now.Sub(o.timeFailed) > 6*time.Second {
 			o.stop()
@@ -732,10 +794,7 @@ func (o *overlayState) tick() {
 		}
 		return
 	}
-	// Refresh the floating Cartridge even when the loading percentage is unchanged.
-	if node:=o.layout.Find(ll.Cartridge); node!=nil && node.Visible && appPrefs.AnimateCartridge && o.cartridge != nil {
-		o.invalidateMotion()
-	}
+	// Motion repaints are driven separately by startFrameClock().
 	// Do not call SetWindowPos at every animation frame: this can stall
 	// the compositor and create microstutter on fullscreen games.
 	if now.Sub(o.lastTopmost)>=250*time.Millisecond {

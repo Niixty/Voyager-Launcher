@@ -247,7 +247,7 @@ func (s *Studio) Run(id, mode string) error {
 	if _, e := readConfig(id); e != nil {
 		return e
 	}
-	if mode != "--game" && mode != "--preview" {
+	if mode != "--game" && mode != "--preview" && mode != "--test-loading" {
 		return errors.New("ação inválida")
 	}
 	exe, e := os.Executable()

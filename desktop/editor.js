@@ -403,6 +403,7 @@ async function editor(g) {
         }
       }),
       btn("Print do layout salvo (50%)", () => api.Run(g.ID, "--preview")),
+      btn("Testar loading (10 s)", () => api.Run(g.ID, "--test-loading")),
     ),
   );
   refresh();
