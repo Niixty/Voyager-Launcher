@@ -2,6 +2,18 @@
 
 Este projeto mostra uma tela de carregamento no Windows enquanto o jogo iniciado via Sunshine abre. O Moonlight transmite essa tela.
 
+## Gerenciador desktop
+
+Abra `VoyagerLauncher.exe` para usar a biblioteca em Wails com WebView2. A interface HTML, CSS e JavaScript vem embutida no executável e funciona offline. As chamadas do frontend usam a ponte local do Wails. O overlay de `--game` e o print de `--preview` continuam no Win32/GDI+. `--classic` abre o gerenciador anterior. Ele também é a alternativa para um Windows sem WebView2.
+
+Na Biblioteca, busque por título, plataforma ou ID. Abra um jogo para editar sua execução, conferir imagens, testar ou copiar o comando do Sunshine. Ao arquivar, a pasta inteira vai para `Games-archive` ao lado de `Games`; mova-a de volta para recuperar o jogo. No editor, use o seletor de camadas para alcançar elementos sobrepostos. Os campos numéricos usam a tela virtual de 1600 × 900. Salve antes de usar o print em 50%.
+
+**Herança de layout.** O layout individual tem prioridade sobre `loading_default.json`. Sem nenhum deles, vale o de fábrica. “Padrão para todos os jogos” guarda os layouts individuais em arquivos `.before_global_…json` antes de passar os jogos para a herança. “Padrão para jogos sem layout próprio” preserva as personalizações.
+
+**Testar a versão do PR.** Faça uma cópia da sua pasta `app` em outro local. Feche o Voyager, extraia os dois executáveis do artefato `Voyager-Windows-x64` nessa cópia e abra o launcher. A versão preview mantém a atualização automática pausada. Para testar via Sunshine, crie um aplicativo temporário com o comando mostrado nessa cópia. Para voltar, abra a instalação anterior. O instalador normal continua buscando a release estável.
+
+**Desenvolvimento.** Use Go 1.23, `go test -vet=off ./...` no Windows e `go build -tags production -ldflags "-H windowsgui" -o dist/VoyagerLauncher.exe .`. Compile o helper com `go build -ldflags "-H windowsgui" -o dist/VoyagerUpdater.exe ./cmd/updater`. Os testes de interface no workflow usam uma instalação temporária e dados fictícios.
+
 ## Estrutura da pasta
 
 - `*.go`, `cmd/`: codigo-fonte do aplicativo e atualizador.
@@ -96,7 +108,7 @@ A aba **EDITOR** mostra uma tela de loading em miniatura e permite mover e dimen
 Clique num elemento para selecionar, arraste para reposicionar e arraste os cantos para redimensionar. A roda do mouse ajusta o tamanho do elemento selecionado. Atalhos: setas (1 px), Shift+setas (10 px), Delete (mostrar/ocultar), Ctrl+Z/Ctrl+Y (desfazer/refazer).
 Ha grade, snap de 10 px, alinhamento a esquerda/centro/direita/topo/meio/base, ajuste da fonte, opcoes de cores e camadas, restaurar um elemento ou o layout todo, e print de 50%.
 
-**O layout e individual por jogo**, salvo automaticamente em `app/Games/<ID>/loading_layout.json`, sem modificar `config.json` e sem publicar dados pessoais no Git. Esse JSON e carregado tanto pelo loading real quanto pelo PRINT 50%. Jogos antigos sem arquivo de layout usam as posicoes originais automaticamente. Os elementos editaveis sao Cartridge, plataforma, titulo, descricao, mensagem de loading, porcentagem, barra de progresso e etapa. O tema da interface nao interfere na cor da barra: ela continua usando a cor extraida do Hero.
+**No editor clássico, o layout é individual por jogo**, salvo automaticamente em `app/Games/<ID>/loading_layout.json`, sem modificar `config.json` e sem publicar dados pessoais no Git. Esse JSON e carregado tanto pelo loading real quanto pelo PRINT 50%. Jogos sem layout individual herdam o padrão global ou, na ausência dele, as posições de fábrica. Os elementos editaveis sao Cartridge, plataforma, titulo, descricao, mensagem de loading, porcentagem, barra de progresso e etapa. O tema da interface nao interfere na cor da barra: ela continua usando a cor extraida do Hero.
 
 ## Layout padrao compartilhado e correção de flicker
 

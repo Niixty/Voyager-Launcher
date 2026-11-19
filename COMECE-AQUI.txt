@@ -12,6 +12,10 @@ JA TEM VOYAGER INSTALADO EM APPDATA?
 5. Corrija o caminho do aplicativo dentro do Sunshine.
 
 INSTALACAO NOVA: execute INSTALAR-VOYAGER.cmd e pressione Enter.
-Git e app sao separados: a pasta app inteira e ignorada pelo GitHub.
+Git versiona os recursos do aplicativo. Games, configuracoes locais e EXEs ficam fora do Git.
 Codigo sincroniza em 10 minutos (se nao houver alteracoes locais).
 EXE consulta novas Releases em 30 minutos.
+
+VERSAO PREVIEW DO PR
+Copie a pasta app, extraia os dois EXEs do artefato na copia e abra VoyagerLauncher.exe.
+Para abrir a interface anterior, execute VoyagerLauncher.exe --classic.

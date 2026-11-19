@@ -361,7 +361,7 @@ func screenRects() []rect {
 }
 // A subtle, continuous vertical bob: roughly 8 reference pixels, 2.6 s per cycle.
 func (o *overlayState) cartridgeOffset() float64 {
-	if o.started.IsZero() { return 0 }
+	if !appPrefs.AnimateCartridge || o.started.IsZero() { return 0 }
 	// Sinusoidal easing avoids abrupt direction changes. The static background
 	// and text are cached, so only the cartridge is animated at up to ~60 FPS.
 	return 11 * math.Sin(time.Since(o.started).Seconds() * (2 * math.Pi / 2.9))
@@ -441,7 +441,7 @@ func (o *overlayState) run() error {
 	}
 	// Request ~60 FPS while the loading is active; Windows may coalesce ticks.
 	// Detection stays throttled separately at ~160ms.
-	call(pSetTimer, o.windows[0], 1, 16, 0)
+	interval:=uintptr(16);if n:=o.layout.Find(ll.Cartridge);!appPrefs.AnimateCartridge||o.cartridge==nil||n==nil||!n.Visible{interval=50};call(pSetTimer,o.windows[0],1,interval,0)
 	windowsLoop()
 	return nil
 }
@@ -498,12 +498,7 @@ func (o *overlayState) startGame() error {
 	o.phase = "Abrindo o jogo"
 	o.invalidateAll()
 	if strings.EqualFold(filepath.Ext(execPath), ".lnk") {
-		// ShellExecute resolves Windows shortcuts. The process tracker finds the actual game window.
-		verb := ptrStr("open")
-		r := call(pShellExecute, 0, verb, ptrStr(execPath), ptrStr(c.Arguments), ptrStr(workdir), SW_SHOWNORMAL)
-		if r <= 32 {
-			return fmt.Errorf("não foi possível abrir o atalho (%d)", r)
-		}
+		pid,err:=launchShortcut(execPath,c.Arguments,workdir);if err!=nil{return err};o.launchPID=pid
 	} else {
 		cmd := exec.Command(execPath, args...)
 		cmd.Dir = workdir
@@ -654,10 +649,10 @@ func isUsableWindow(h uintptr) bool {
 func (o *overlayState) findGameWindow() uintptr {
 	ps := snapshotProcesses()
 	best, bestScore := uintptr(0), -1
-	requested := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(o.cfg.WaitForProcess), ".exe"))
+	requested := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(o.cfg.WaitForProcess)), ".exe")
 	enumeratedWindows = enumeratedWindows[:0]
 	call(pEnumWindows, enumGameWindowCallback, 0)
-	fallback := []uintptr{}
+	
 	for _, w := range enumeratedWindows {
 		pi, ok := ps[w.pid]
 		if !ok {
@@ -668,9 +663,6 @@ func (o *overlayState) findGameWindow() uintptr {
 			continue
 		}
 		newProcess := !o.baseline[w.pid]
-		if newProcess && requested == "" {
-			fallback = append(fallback, w.handle)
-		}
 		score := 0
 		if w.pid == o.launchPID && o.launchPID != 0 {
 			score = 180
@@ -696,7 +688,7 @@ func (o *overlayState) findGameWindow() uintptr {
 			if strings.EqualFold(path, o.mainExe) {
 				score += 85
 			}
-			if o.launchDir != "" && strings.HasPrefix(strings.ToLower(path), strings.ToLower(filepath.Clean(o.launchDir)+string(os.PathSeparator))) {
+			if newProcess && o.launchDir != "" && !strings.EqualFold(filepath.Ext(o.mainExe),".lnk") && strings.HasPrefix(strings.ToLower(path), strings.ToLower(filepath.Clean(o.launchDir)+string(os.PathSeparator))) {
 				score += 55
 			}
 		}
@@ -704,11 +696,6 @@ func (o *overlayState) findGameWindow() uintptr {
 			best = w.handle
 			bestScore = score
 		}
-	}
-	// If a shortcut/Steam launcher detached the real game, prefer a single newly
-	// created visible window rather than accidentally tracking an existing app.
-	if best == 0 && len(fallback) == 1 && time.Since(o.started) > 1200*time.Millisecond {
-		return fallback[0]
 	}
 	return best
 }
@@ -732,7 +719,7 @@ func (o *overlayState) tick() {
 		return
 	}
 	// Refresh the floating Cartridge even when the loading percentage is unchanged.
-	if o.cartridge != nil {
+	if node:=o.layout.Find(ll.Cartridge); node!=nil && node.Visible && appPrefs.AnimateCartridge && o.cartridge != nil {
 		o.invalidateAll()
 	}
 	// Do not call SetWindowPos at every animation frame: this can stall
