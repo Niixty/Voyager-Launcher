@@ -5,10 +5,11 @@ import (
  "fmt"
  "io"
  "os"
- "path/filepath"
+ "voyager/native/internal/jsonstore"
 )
 
 type Config struct {
+ AnimateCartridge bool `json:"animateCartridge"`
  Theme string `json:"theme"`
  ShowPercentage bool `json:"showPercentage"`
  ShowDescription bool `json:"showDescription"`
@@ -31,7 +32,7 @@ var Presets = []Preset{
 }
 
 func Default() Config {
- return Config{Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78,PostOpenSeconds:1}
+ return Config{AnimateCartridge:true,Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78,PostOpenSeconds:1}
 }
 func ValidTheme(id string) bool {
  for _,p:=range Presets {if p.ID==id{return true}}
@@ -66,26 +67,11 @@ func Load(path string) Config {
 // Save preserves a backup until the new file is safely renamed.
 func Save(path string,c Config) error {
  c=c.Normalize()
- dir:=filepath.Dir(path)
- if err:=os.MkdirAll(dir,0755);err!=nil{return err}
- b,err:=json.MarshalIndent(c,"","  ")
- if err!=nil{return err}
- tmp,err:=os.CreateTemp(dir,"settings-*.tmp")
- if err!=nil{return err}
- tempName:=tmp.Name()
- defer os.Remove(tempName)
- if _,err=tmp.Write(append(b,'\n'));err!=nil {tmp.Close();return err}
- if err=tmp.Close();err!=nil{return err}
- if _,err=os.Stat(path);err==nil{
-  backup:=path+".backup"
-  _=os.Remove(backup)
-  if err=os.Rename(path,backup);err!=nil{return err}
-  if err=os.Rename(tempName,path);err!=nil{
-   _=os.Rename(backup,path)
-   return err
-  }
-  _=os.Remove(backup)
-  return nil
- }
- return os.Rename(tempName,path)
+ data,err:=json.Marshal(c);if err!=nil{return err}
+ var current map[string]json.RawMessage
+ if previous,err:=os.ReadFile(path);err==nil{_ = json.Unmarshal(previous,&current)}
+ if current==nil{current=map[string]json.RawMessage{}}
+ var typed map[string]json.RawMessage
+ if err=json.Unmarshal(data,&typed);err!=nil{return err};for k,v:=range typed{current[k]=v}
+ data,err=json.MarshalIndent(current,"","  ");if err!=nil{return err};return jsonstore.Write(path,append(data,'\n'))
 }
