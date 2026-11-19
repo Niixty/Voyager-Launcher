@@ -13,3 +13,6 @@
 /app/updates/
 /app/*.local.json
 # app/themes, app/assets, app/docs estao versionados
+
+# Preferências locais (arquivo de exemplo versionado)
+/app/settings.json

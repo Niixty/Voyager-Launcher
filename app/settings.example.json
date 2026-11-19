@@ -1,0 +1,8 @@
+{
+  "theme": "cinza",
+  "showPercentage": true,
+  "showDescription": true,
+  "showPhase": true,
+  "blurBackground": true,
+  "backgroundDim": 78
+}

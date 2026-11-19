@@ -25,6 +25,10 @@ var overlayTheme = appearance.Default()
 
 func loadOverlayTheme() {
     overlayTheme = appearance.Load(filepath.Join(rootDir, "themes", "default.json"))
+    accent := appPrefs.AccentHex()
+    overlayTheme.Colors["progressFill"] = accent
+    overlayTheme.Colors["brandDot"] = accent
+    overlayTheme.Colors["dimOverlay"] = fmt.Sprintf("#%02X080A0C", appPrefs.BackgroundDim*255/100)
 }
 
 type overlayState struct {
@@ -145,7 +149,9 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 	if len(c.Description) > 270 {
 		c.Description = c.Description[:270]
 	}
-	T(-274, 15, 790, 85, c.Description, 19, palette(overlayTheme.Color("description")), false)
+	if appPrefs.ShowDescription {
+        T(-274, 15, 790, 85, c.Description, 19, palette(overlayTheme.Color("description")), false)
+    }
 	heading := overlayTheme.LoadingTitle
 	statusColor := palette(overlayTheme.Color("heading"))
 	if failed {
@@ -153,7 +159,9 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 		statusColor = palette(overlayTheme.Color("headingError"))
 	}
 	T(-274, 124, 615, 43, heading, 25, statusColor, false)
-	T(477, 130, 125, 38, fmt.Sprintf("%d%%", percent), 21, palette(overlayTheme.Color("percentage")), false)
+	if appPrefs.ShowPercentage {
+        T(477, 130, 125, 38, fmt.Sprintf("%d%%", percent), 21, palette(overlayTheme.Color("percentage")), false)
+    }
 	p.fill(X(-274), Y(184), D(865), D(6), palette(overlayTheme.Color("progressTrack")))
 	fillColor := palette(overlayTheme.Color("progressFill"))
 	if failed {
@@ -168,7 +176,9 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 	if failed {
 		phase = detail
 	}
-	T(-274, 201, 865, 40, phase, 15, palette(overlayTheme.Color("status")), false)
+	if appPrefs.ShowPhase || failed {
+        T(-274, 201, 865, 40, phase, 15, palette(overlayTheme.Color("status")), false)
+    }
 	T(-622, 332, 370, 35, overlayTheme.Footer, 12, palette(overlayTheme.Color("footer")), false)
 }
 func loadBlurry(src string) *img {
@@ -289,7 +299,8 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath string) (string, err
 	if cover != nil {
 		defer cover.close()
 	}
-	bg := loadBlurry(heroPath)
+	bg := loadImg(heroPath)
+    if appPrefs.BlurBackground { bg = loadBlurry(heroPath) }
 	if bg != nil {
 		defer bg.close()
 	}
@@ -364,7 +375,11 @@ func (o *overlayState) run() error {
 		}
 	}()
 	o.cover = loadImg(artworkPath(o.cfg, o.id, "grid"))
-	o.background = loadBlurry(artworkPath(o.cfg, o.id, "hero"))
+	if appPrefs.BlurBackground {
+        o.background = loadBlurry(artworkPath(o.cfg, o.id, "hero"))
+    } else {
+        o.background = loadImg(artworkPath(o.cfg, o.id, "hero"))
+    }
 	if err := registerOverlayWindow(); err != nil {
 		return err
 	}

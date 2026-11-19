@@ -490,7 +490,7 @@ func copyClipboard(hwnd uintptr, s string) {
 	}
 }
 func (m *managerState) click(x, y int) {
-	if x < 250 && y >= 166 && y < m.windowH-173 {
+	if x < 250 && y >= 166 && y < m.windowH-225 {
 		row := (y-168)/47 + m.scroll
 		if row >= 0 && row < len(m.ids) {
 			m.load(m.ids[row])
@@ -505,6 +505,7 @@ func (m *managerState) click(x, y int) {
 	}
 }
 func (m *managerState) action(key string) {
+	if m.settingsAction(key) { return }
 	switch key {
 	case "new":
 		m.resetNew()
@@ -548,7 +549,7 @@ func (m *managerState) action(key string) {
 		copyClipboard(m.hwnd, getText(m.inputs["Cover"]))
 		m.status = "Caminho da capa copiado"
 		invalid(m.hwnd)
-	case "tab0", "tab1", "tab2", "tab3":
+	case "tab0", "tab1", "tab2", "tab3", "tab4":
 		m.tab = int(key[3] - '0')
 		m.layout()
 		invalid(m.hwnd)
@@ -614,7 +615,7 @@ func (m *managerState) btn(p *painter, key, label string, x, y, w, h int, select
 	bg := cButton
 	fg := cWhite
 	if selected {
-		bg = 0xff52545a
+		bg = palette(appPrefs.DarkAccent())
 	}
 	p.fill(x, y, w, h, bg)
 	p.fill(x, y+h-2, w, 2, 0xff45474f)
@@ -636,7 +637,7 @@ func (m *managerState) paint(p *painter) {
 	p.text(27, 72, 220, 25, "MOONLIGHT LOADING  •  v"+version, 10, cMuted, true)
 	p.text(27, 132, 190, 25, "MEUS JOGOS", 12, 0xffbbbbc2, true)
 	p.text(229, 132, 35, 25, fmt.Sprintf("%d", len(m.ids)), 12, cMuted, true)
-	maxRows := (h - 345) / 47
+	maxRows := (h - 405) / 47
 	if maxRows < 1 {
 		maxRows = 1
 	}
@@ -650,23 +651,27 @@ func (m *managerState) paint(p *painter) {
 		id := m.ids[row+m.scroll]
 		y := 168 + 47*row
 		if id == m.activeID {
-			p.fill(17, y, 237, 42, 0xff383840)
+			p.fill(17, y, 237, 42, palette(appPrefs.DarkAccent()))
 		} else {
 			p.fill(17, y, 237, 42, 0xff1c1c20)
 		}
 		p.text(30, y+10, 210, 28, id, 13, cWhite, id == m.activeID)
 	}
+	m.btn(p, "settings", "CONFIGURAÇÕES", 23, h-209, 225, 42, m.tab == 4)
 	m.btn(p, "new", "+  NOVO JOGO", 23, h-151, 225, 42, false)
 	m.btn(p, "import", "IMPORTAR JOGOS", 23, h-98, 225, 40, false)
+	p.fill(22, 24, 4, 42, palette(appPrefs.Accent()))
 	p.text(310, 26, w-340, 24, "BIBLIOTECA DE JOGOS", 11, cMuted, true)
 	title := m.field("Title")
-	if title == "" {
-		title = "Configuração do jogo"
-	}
+	if m.tab == 4 {
+        title = "Configurações do Voyager"
+    } else if title == "" {
+        title = "Configuração do jogo"
+    }
 	p.text(310, 54, w-420, 54, title, 28, cWhite, true)
 	p.fill(w-269, 32, 229, 36, 0xff232329)
 	p.text(w-250, 39, 207, 23, "SUNSHINE  •  MOONLIGHT", 10, cMuted, true)
-	tabNames := []string{"JOGO", "IMAGENS", "EXECUÇÃO", "SUNSHINE"}
+	tabNames := []string{"JOGO", "IMAGENS", "EXECUÇÃO", "SUNSHINE", "AJUSTES"}
 	x := 310
 	for i, t := range tabNames {
 		ww := 110
@@ -676,10 +681,11 @@ func (m *managerState) paint(p *painter) {
 		if i == 3 {
 			ww = 124
 		}
+        if i == 4 { ww = 110 }
 		selected := m.tab == i
 		if selected {
 			p.fill(x, 128, ww, 40, 0xff34343a)
-			p.fill(x, 164, ww, 3, 0xffd4d5dc)
+			p.fill(x, 164, ww, 3, palette(appPrefs.Accent()))
 		} else {
 			p.fill(x, 128, ww, 40, 0xff19191d)
 		}
@@ -748,8 +754,10 @@ func (m *managerState) paint(p *painter) {
 			fieldRect(left+8, 596, full-20, 35)
 			p.text(left+8, 635, full-24, 31, "Para launchers que abrem outro executável, informe o nome do processo real.", 11, cMuted, false)
 		}
-	case 3:
-		section("Conectar ao Moonlight")
+	case 4:
+        m.paintSettings(p)
+    case 3:
+        section("Conectar ao Moonlight")
 		label(left+8, 235, "COMANDO DE INICIALIZAÇÃO")
 		fieldRect(left+8, 265, full-20, 72)
 		m.btn(p, "copycommand", "COPIAR COMANDO COMPLETO", left+8, 348, 285, 42, false)
@@ -765,8 +773,12 @@ func (m *managerState) paint(p *painter) {
 	bw := 135
 	gap := 9
 	right := w - 24
-	m.btn(p, "save", "SALVAR", right-(bw+gap)*4, h-72, bw, 44, true)
-	m.btn(p, "launch", "TESTAR JOGO", right-(bw+gap)*3, h-72, bw, 44, false)
-	m.btn(p, "preview", "PRINT 50%", right-(bw+gap)*2, h-72, bw, 44, false)
-	m.btn(p, "folder", "ABRIR PASTA", right-(bw+gap), h-72, bw, 44, false)
+	if m.tab == 4 {
+        m.paintSettingsFooter(p, right, h)
+    } else {
+        m.btn(p, "save", "SALVAR", right-(bw+gap)*4, h-72, bw, 44, true)
+        m.btn(p, "launch", "TESTAR JOGO", right-(bw+gap)*3, h-72, bw, 44, false)
+        m.btn(p, "preview", "PRINT 50%", right-(bw+gap)*2, h-72, bw, 44, false)
+        m.btn(p, "folder", "ABRIR PASTA", right-(bw+gap), h-72, bw, 44, false)
+    }
 }

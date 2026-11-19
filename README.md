@@ -55,3 +55,11 @@ Go 1.23+; o GitHub Actions executa testes e compila os dois executaveis no Windo
 ## Icone do aplicativo
 
 O icone oficial fica em `app/assets/VoyagerLauncher.ico`, criado a partir da arte enviada pelo autor. A compilacao Windows gera `rsrc_windows_amd64.syso` com `github.com/akavel/rsrc@v0.10.2`, incorporando o icone ao executavel. A janela principal tambem usa esse recurso. O formato `.ico` e um arquivo binario versionado; os executaveis continuam nas Releases.
+
+## Configurações (nova aba AJUSTES)
+
+A aba AJUSTES e o botao CONFIGURACOES na barra lateral permitem escolher tema **Cinza, Roxo, Verde, Vermelho, Azul, Laranja, Rosa ou Ciano**. A cor escolhida aparece nos destaques do gerenciador e na barra/identificacao do loading.
+
+Tambem e possivel mostrar/ocultar porcentagem, descricao, etapa atual, ligar/desligar o desfoque de fundo e escolher escurecimento leve, normal ou forte. Os botoes RESTAURAR, ATUALIZACOES, PRINT 50% e ABRIR APP ficam no rodape dessa aba.
+
+As escolhas sao salvas automaticamente em `app/settings.json` (ignorado pelo Git, preservado nas atualizacoes). `app/settings.example.json` documenta os valores iniciais. Mudar o codigo do menu gera novo EXE via Actions; mudar preferencias no menu nao exige recompilacao.
