@@ -96,6 +96,11 @@ func apply(target, staged string) error {
 	for i := 0; i < 30; i++ {
 		if err = os.Rename(staged, target); err == nil {
 			os.Remove(staged + ".sha256")
+			file, e := os.OpenFile(filepath.Join(filepath.Dir(target), "VoyagerUpdater-history.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if e == nil {
+				fmt.Fprintf(file, "%s  Instalado SHA-256 %s\n", time.Now().Format(time.RFC3339), actual)
+				file.Close()
+			}
 			return nil
 		}
 		if !errors.Is(err, syscall.Errno(32)) && !errors.Is(err, syscall.Errno(5)) {

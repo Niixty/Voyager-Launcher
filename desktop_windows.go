@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -460,4 +461,34 @@ func (s *Studio) AnimationLayers(id string, l ll.Layout) (map[string]string, err
 		return map[string]string{"base": base, "above": above, "kind": kind}, nil
 	}
 	return nil, errors.New("layout sem camada de cartucho")
+}
+
+func (s *Studio) UpdateHistory() (string, error) {
+	f, e := os.Open(filepath.Join(rootDir, "VoyagerUpdater-history.log"))
+	if errors.Is(e, os.ErrNotExist) {
+		return "Nenhuma atualização registrada.", nil
+	}
+	if e != nil {
+		return "", e
+	}
+	defer f.Close()
+	info, e := f.Stat()
+	if e != nil {
+		return "", e
+	}
+	const max = 8192
+	if info.Size() > max {
+		if _, e = f.Seek(-max, io.SeekEnd); e != nil {
+			return "", e
+		}
+	}
+	b, e := io.ReadAll(io.LimitReader(f, max))
+	if e != nil {
+		return "", e
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) > 12 {
+		lines = lines[len(lines)-12:]
+	}
+	return strings.Join(lines, "\n"), nil
 }

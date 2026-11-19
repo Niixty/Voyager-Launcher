@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+ "strings"
 	"unsafe"
 )
 
@@ -143,7 +144,7 @@ func (p *painter) text(x, y, w, h int, s string, size float32, c palette, bold b
 		return
 	}
 	call(pGdipCreateSolidFill, uintptr(c), uintptr(unsafe.Pointer(&brush)))
-	t := syscall.StringToUTF16(s)
+	t := syscall.StringToUTF16(strings.ReplaceAll(s,"\x00","�"))
 	rc := rectF{float32(x), float32(y), float32(w), float32(h)}
 	call(pGdipDrawString, p.g, uintptr(unsafe.Pointer(&t[0])), uintptr(len(t)-1), font, uintptr(unsafe.Pointer(&rc)), 0, brush)
 	call(pGdipDeleteBrush, brush)

@@ -532,8 +532,14 @@ async function prefs() {
           : "Você está na versão atual.",
       );
     }),
+    btn("Histórico", async () => {
+      const log = await api.UpdateHistory();
+      d.querySelector("pre")?.remove();
+      d.append(el("pre", log));
+    }),
     btn("Verificar biblioteca", async () => {
       const lines = await api.Diagnose();
+      d.querySelector("pre")?.remove();
       d.append(
         el("pre", lines.join("\n") || "Arquivos de execução encontrados."),
       );

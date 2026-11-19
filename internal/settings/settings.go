@@ -56,14 +56,11 @@ func (c Config) Normalize() Config {
 
 // Load overlays present fields on defaults, leaving backward-compatible booleans.
 func Load(path string) Config {
- c:=Default()
- f,err:=os.Open(path)
- if err!=nil{return c}
- defer f.Close()
- b,err:=io.ReadAll(io.LimitReader(f,64*1024))
- if err!=nil||len(b)>=64*1024{return c}
- if err=json.Unmarshal(b,&c);err!=nil{return Default()}
- return c.Normalize()
+ for _,name:=range []string{path,path+".backup"}{
+   f,err:=os.Open(name);if err!=nil{continue};b,err:=io.ReadAll(io.LimitReader(f,64*1024));f.Close()
+   c:=Default();if err==nil && len(b)<64*1024 && json.Unmarshal(b,&c)==nil{return c.Normalize()}
+ }
+ return Default()
 }
 
 // Save preserves a backup until the new file is safely renamed.

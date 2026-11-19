@@ -658,7 +658,7 @@ func (o *overlayState) findGameWindow() uintptr {
 	requested := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(o.cfg.WaitForProcess)), ".exe")
 	enumeratedWindows = enumeratedWindows[:0]
 	call(pEnumWindows, enumGameWindowCallback, 0)
-	
+ foreground:=call(u32.NewProc("GetForegroundWindow"))
 	for _, w := range enumeratedWindows {
 		pi, ok := ps[w.pid]
 		if !ok {
@@ -682,7 +682,9 @@ func (o *overlayState) findGameWindow() uintptr {
 			}
 			if newProcess {
 				score += 150
-			} else {
+			} else if w.handle==foreground || w.handle==o.targetHWND {
+ score+=85
+ } else {
 				score += 20
 			}
 		}
