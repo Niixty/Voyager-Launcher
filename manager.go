@@ -765,7 +765,7 @@ func (m *managerState) paint(p *painter) {
 		fieldRect(left+half+18, 353, half-18, 33)
 		label(left+8, 432, "DESCRIÇÃO DO JOGO")
 		fieldRect(left+8, 457, full-20, 110)
-		p.text(left+8, 581, full-20, 38, "A tela de loading termina 1 segundo depois da janela do jogo ficar visível.", 12, cMuted, false)
+		p.text(left+8, 581, full-20, 38, fmt.Sprintf("A tela de loading termina %d segundo(s) depois da janela do jogo ficar visível.",appPrefs.PostOpenSeconds), 12, cMuted, false)
 	case 1:
 		section("Identidade visual do jogo")
 		p.text(331, 224, w-400, 36, "HERO: fundo do loading  •  GRID: capa do Moonlight  •  CARTRIDGE: imagem no editor.", 12, cMuted, false)

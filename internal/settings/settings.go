@@ -15,6 +15,7 @@ type Config struct {
  ShowPhase bool `json:"showPhase"`
  BlurBackground bool `json:"blurBackground"`
  BackgroundDim int `json:"backgroundDim"`
+ PostOpenSeconds int `json:"postOpenSeconds"`
 }
 
 type Preset struct{ ID, Name string; Accent, Dark uint32 }
@@ -30,7 +31,7 @@ var Presets = []Preset{
 }
 
 func Default() Config {
- return Config{Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78}
+ return Config{Theme:"cinza",ShowPercentage:true,ShowDescription:true,ShowPhase:true,BlurBackground:true,BackgroundDim:78,PostOpenSeconds:1}
 }
 func ValidTheme(id string) bool {
  for _,p:=range Presets {if p.ID==id{return true}}
@@ -46,6 +47,7 @@ func (c Config) AccentHex() string {return fmt.Sprintf("#%08X",c.Accent())}
 func (c Config) Normalize() Config {
  if !ValidTheme(c.Theme) {c.Theme="cinza"}
  if c.BackgroundDim<30||c.BackgroundDim>95 {c.BackgroundDim=78}
+ if c.PostOpenSeconds<1||c.PostOpenSeconds>15 {c.PostOpenSeconds=1}
  return c
 }
 

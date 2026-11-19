@@ -47,7 +47,7 @@ type overlayState struct {
 	mainExe, launchDir                 string
 	process                            *os.Process
 	baseline                           map[uint32]bool
-	lastCheck                          time.Time
+	lastCheck, lastTopmost             time.Time
 	fail                               string
 	shown                              bool
 }
@@ -362,7 +362,9 @@ func screenRects() []rect {
 // A subtle, continuous vertical bob: roughly 8 reference pixels, 2.6 s per cycle.
 func (o *overlayState) cartridgeOffset() float64 {
 	if o.started.IsZero() { return 0 }
-	return 8 * math.Sin(time.Since(o.started).Seconds() * (2 * math.Pi / 2.6))
+	// Sinusoidal easing avoids abrupt direction changes. The static background
+	// and text are cached, so only the cartridge is animated at up to ~60 FPS.
+	return 11 * math.Sin(time.Since(o.started).Seconds() * (2 * math.Pi / 2.9))
 }
 
 func (o *overlayState) stop() {
@@ -437,9 +439,9 @@ func (o *overlayState) run() error {
 		o.phase = o.fail
 		o.invalidateAll()
 	}
-	// 40ms keeps the floating animation smooth without changing the
-	// existing throttled (~160ms) game-window detection.
-	call(pSetTimer, o.windows[0], 1, 40, 0)
+	// Request ~60 FPS while the loading is active; Windows may coalesce ticks.
+	// Detection stays throttled separately at ~160ms.
+	call(pSetTimer, o.windows[0], 1, 16, 0)
 	windowsLoop()
 	return nil
 }
@@ -733,9 +735,13 @@ func (o *overlayState) tick() {
 	if o.cartridge != nil {
 		o.invalidateAll()
 	}
-	// Fullscreen and borderless games can steal the Z-order while switching video modes.
-	for _, hw := range o.windows {
-		call(pSetWindowPos, hw, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
+	// Do not call SetWindowPos at every animation frame: this can stall
+	// the compositor and create microstutter on fullscreen games.
+	if now.Sub(o.lastTopmost)>=250*time.Millisecond {
+		o.lastTopmost=now
+		for _,hw:=range o.windows {
+			call(pSetWindowPos, hw, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
+		}
 	}
 	if now.Sub(o.lastCheck) < 160*time.Millisecond {
 		return
@@ -751,15 +757,18 @@ func (o *overlayState) tick() {
 			o.invalidateAll()
 		}
 		age := now.Sub(o.ready)
-		// Exactly 1 second of continuous visibility, without any configured minimum loading time.
-		if age >= time.Second {
+		// Hold only after the same game window is continuously detected.
+		// No artificial delay is added before opening the game.
+		hold := time.Duration(appPrefs.PostOpenSeconds) * time.Second
+		if hold < time.Second { hold = time.Second }
+		if age >= hold {
 			o.percent = 100
 			o.phase = "Jogo pronto"
 			o.invalidateAll()
 			call(pSetForegroundWindow, candidate)
 			o.fadeAt = now
 		} else {
-			v := 70 + int(age.Seconds()*25)
+			v := 70 + int(age.Seconds()/hold.Seconds()*25)
 			if v > 95 {
 				v = 95
 			}

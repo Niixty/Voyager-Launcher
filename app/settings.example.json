@@ -4,5 +4,6 @@
   "showDescription": true,
   "showPhase": true,
   "blurBackground": true,
-  "backgroundDim": 78
+  "backgroundDim": 78,
+  "postOpenSeconds": 1
 }

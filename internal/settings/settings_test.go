@@ -18,15 +18,31 @@ func TestSaveAndLoad(t *testing.T){
  p:=filepath.Join(t.TempDir(),"app","settings.json")
  c:=Load(p)
  if !c.ShowPercentage||!c.BlurBackground {t.Fatal("defaults")}
- c.Theme="roxo";c.ShowPercentage=false;c.BackgroundDim=88
+ c.Theme="roxo";c.ShowPercentage=false;c.BackgroundDim=88;c.PostOpenSeconds=3
  if err:=Save(p,c);err!=nil {t.Fatal(err)}
  got:=Load(p)
- if got.Theme!="roxo"||got.ShowPercentage||got.BackgroundDim!=88 {t.Fatalf("roundtrip: %+v",got)}
+ if got.Theme!="roxo"||got.ShowPercentage||got.BackgroundDim!=88||got.PostOpenSeconds!=3 {t.Fatalf("roundtrip: %+v",got)}
  got.Theme="verde"
  if err:=Save(p,got);err!=nil {t.Fatal(err)}
  if Load(p).Theme!="verde" {t.Fatal("second save")}
  if err:=os.WriteFile(p,[]byte("{\"theme\":\"invalid\",\"backgroundDim\":100}"),0600);err!=nil {t.Fatal(err)}
- if got=Load(p);got.Theme!="cinza"||got.BackgroundDim!=78||!got.ShowPercentage {t.Fatalf("invalid defaults: %+v",got)}
+ if got=Load(p);got.Theme!="cinza"||got.BackgroundDim!=78||got.PostOpenSeconds!=1||!got.ShowPercentage {t.Fatalf("invalid defaults: %+v",got)}
  if err:=os.WriteFile(p,[]byte("invalid"),0600);err!=nil {t.Fatal(err)}
  if Load(p).Theme!="cinza" {t.Fatal("invalid json")}
+}
+
+func TestPostOpenSecondsValidation(t *testing.T){
+    p:=filepath.Join(t.TempDir(),"settings.json")
+    for _,tc:=range []struct{source string;want int}{
+        {`{"theme":"azul"}`,1},
+        {`{"postOpenSeconds":3}`,3},
+        {`{"postOpenSeconds":15}`,15},
+        {`{"postOpenSeconds":0}`,1},
+        {`{"postOpenSeconds":-1}`,1},
+        {`{"postOpenSeconds":999}`,1},
+    }{
+        if err:=os.WriteFile(p,[]byte(tc.source),0600);err!=nil{t.Fatal(err)}
+        got:=Load(p)
+        if got.PostOpenSeconds!=tc.want{t.Fatalf("input %s got %d want %d",tc.source,got.PostOpenSeconds,tc.want)}
+    }
 }

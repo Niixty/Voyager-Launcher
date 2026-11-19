@@ -50,6 +50,15 @@ func (m *managerState) settingsAction(key string) bool {
   m.changeAppPrefs(func(c *settings.Config){c.ShowPhase=!c.ShowPhase})
  case "prefblur":
   m.changeAppPrefs(func(c *settings.Config){c.BlurBackground=!c.BlurBackground})
+ case "prefhold:minus":
+  m.changeAppPrefs(func(c *settings.Config){if c.PostOpenSeconds>1{c.PostOpenSeconds--}})
+ case "prefhold:plus":
+  m.changeAppPrefs(func(c *settings.Config){if c.PostOpenSeconds<15{c.PostOpenSeconds++}})
+ case "prefhold:1","prefhold:3","prefhold:5":
+  desired:=1
+  if key=="prefhold:3"{desired=3}
+  if key=="prefhold:5"{desired=5}
+  m.changeAppPrefs(func(c *settings.Config){c.PostOpenSeconds=desired})
  case "prefdim:50","prefdim:78","prefdim:88":
   var dim int
   switch key {
@@ -109,8 +118,16 @@ func (m *managerState) paintSettings(p *painter){
  for i,choice:=range []struct{value int;label string}{{50,"LEVE"},{78,"NORMAL"},{88,"FORTE"}} {
   m.btn(p,fmt.Sprintf("prefdim:%d",choice.value),choice.label,left+18+i*(dimW+8),544,dimW,38,appPrefs.BackgroundDim==choice.value)
  }
- caption(590,"As preferências são salvas na pasta app sem alterar seus jogos.")
- caption(613,"O loading termina 1 segundo após uma janela estável ser detectada.")
+ caption(583,fmt.Sprintf("TEMPO APÓS ABRIR O JOGO: %d SEGUNDO(S)",appPrefs.PostOpenSeconds))
+ bw:=(full-64)/5
+ if bw>130 { bw=130 }
+ x:=left+18
+ m.btn(p,"prefhold:minus","- 1 s",x,615,bw,34,false)
+ m.btn(p,"prefhold:plus","+ 1 s",x+(bw+8),615,bw,34,false)
+ m.btn(p,"prefhold:1","1 s",x+2*(bw+8),615,bw,34,appPrefs.PostOpenSeconds==1)
+ m.btn(p,"prefhold:3","3 s",x+3*(bw+8),615,bw,34,appPrefs.PostOpenSeconds==3)
+ m.btn(p,"prefhold:5","5 s",x+4*(bw+8),615,bw,34,appPrefs.PostOpenSeconds==5)
+ caption(652,"1 a 15 segundos depois que a janela do jogo for detectada continuamente.")
 }
 func (m *managerState) paintSettingsFooter(p *painter,right,h int){
  bw,gap:=135,9

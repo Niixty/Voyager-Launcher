@@ -104,3 +104,10 @@ No editor, o botão **PADRÃO P/ TODOS** grava o layout atual em `app/loading_de
 Antes de substituir cada `Games/<ID>/loading_layout.json`, o app guarda uma cópia `loading_layout.json.before_global_<data>.json` na pasta do jogo. O padrão global e os backups são arquivos locais ignorados pelo Git.
 
 O loading real agora utiliza uma superfície de memória reutilizável por monitor e apresenta cada quadro completo de uma vez com BitBlt, sem exibir etapas parciais da pintura GDI+. Isso evita que o fundo e os textos pisquem durante a animação do cartucho. A detecção da janela do jogo, a barra de progresso e a transição final mantêm o comportamento anterior.
+
+## Tempo depois da janela abrir e animação otimizada
+
+Em **AJUSTES → Tempo após abrir o jogo** você pode usar os atalhos de **1 s**, **3 s**, **5 s**, ou ajustar com **-1 / +1 segundo** até o máximo de 15 segundos. O padrão e 1 segundo. O tempo só começa a ser contado depois da detecção contínua da janela do jogo. O restante da detecção, o início do jogo e o fade continuam independentes.
+
+A animação do Cartridge agora solicita quadros a cada 16 ms (aproximadamente 60 FPS, sujeito ao agendamento do Windows) e usa uma oscilação senoidal suave de 11 px em 2,9 segundos. O conteúdo estático de cada monitor — Hero, textos, barras e status — é guardado em uma superfície gráfica reutilizável, recalculado apenas quando os dados mudam. Durante a animação, o programa repõe essa superfície e desenha somente o Cartridge, reduzindo o custo e evitando travamentos associados a redesenhar toda a tela.
+O reposicionamento forçado da janela sempre-no-topo também foi reduzido para no máximo uma vez a cada 250 ms.
