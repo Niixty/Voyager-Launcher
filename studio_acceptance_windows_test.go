@@ -15,8 +15,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v2"
 	wr "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -40,11 +42,48 @@ func (p *AcceptanceProbe) Done(problem string) {
 	}
 }
 func (p *AcceptanceProbe) ChooseFile() error {
-	out, err := exec.Command("powershell.exe", "-NoProfile", "-File", "tools/tests/choose-file.ps1", "-AppProcess", strconv.Itoa(os.Getpid()), "-ImagePath", p.fixture).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %w", out, err)
+	deadline := time.Now().Add(12 * time.Second)
+	for time.Now().Before(deadline) {
+		dlg := call(u32.NewProc("FindWindowW"), uintptr(wide("#32770")), uintptr(wide("Selecionar arquivo")))
+		var pid uint32
+		if dlg != 0 {
+			call(pGetWindowThreadProcessId, dlg, uintptr(unsafe.Pointer(&pid)))
+		}
+		if pid == uint32(os.Getpid()) {
+			edit := uintptr(0)
+			cb := syscall.NewCallback(func(h, param uintptr) uintptr {
+				var class [80]uint16
+				call(u32.NewProc("GetClassNameW"), h, uintptr(unsafe.Pointer(&class[0])), 80)
+				if syscall.UTF16ToString(class[:]) != "Edit" || call(pIsWindowVisible, h) == 0 {
+					return 1
+				}
+				// The common dialog nests its filename Edit under control 1148.
+				for parent := h; parent != 0 && parent != dlg; parent = call(u32.NewProc("GetParent"), parent) {
+					if call(u32.NewProc("GetDlgCtrlID"), parent) == 1148 {
+						edit = h
+						return 0
+					}
+				}
+				return 1
+			})
+			call(u32.NewProc("EnumChildWindows"), dlg, cb, 0)
+			if edit != 0 {
+				var result uintptr
+				if call(u32.NewProc("SendMessageTimeoutW"), edit, 0x000c, 0, uintptr(wide(p.fixture)), 2, 3000, uintptr(unsafe.Pointer(&result))) == 0 {
+					return fmt.Errorf("campo Nome do arquivo sem resposta")
+				}
+				accept := call(u32.NewProc("GetDlgItem"), dlg, 1)
+				if accept == 0 {
+					return fmt.Errorf("botão Abrir ausente")
+				}
+				call(pPostMessage, accept, 0x00f5, 0, 0)
+				return nil
+			}
+		}
+		time.Sleep(150 * time.Millisecond)
 	}
-	return nil
+	return fmt.Errorf("campo Nome do arquivo não encontrado no diálogo do processo")
+
 }
 func (p *AcceptanceProbe) Capture(name string) error {
 	if name != "biblioteca" && name != "editor" {
