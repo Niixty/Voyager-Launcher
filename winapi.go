@@ -35,6 +35,8 @@ const (
 	WM_SIZE                           = 5
 	WM_COMMAND                        = 0x111
 	WM_LBUTTONDOWN                    = 0x201
+	WM_LBUTTONUP                      = 0x202
+	WM_MOUSEMOVE                      = 0x200
 	WM_MOUSEWHEEL                     = 0x20A
 	WM_CTLCOLORSTATIC                 = 0x138
 	WM_CTLCOLOREDIT                   = 0x133
@@ -205,6 +207,9 @@ var (
 	pSetLayeredWindowAttributes  = u32.NewProc("SetLayeredWindowAttributes")
 	pShowCursor                  = u32.NewProc("ShowCursor")
 	pSetFocus                    = u32.NewProc("SetFocus")
+	pSetCapture                  = u32.NewProc("SetCapture")
+	pReleaseCapture              = u32.NewProc("ReleaseCapture")
+	pGetKeyState                 = u32.NewProc("GetKeyState")
 	pSetForegroundWindow         = u32.NewProc("SetForegroundWindow")
 	pPostMessage                 = u32.NewProc("PostMessageW")
 	pSetWindowLongPtr            = u32.NewProc("SetWindowLongPtrW")

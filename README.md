@@ -89,3 +89,11 @@ A animacao para quando o loading termina; o comportamento de deteccao do jogo
 nao foi alterado. Se nao houver Cartridge, a Grid continua como fallback.
 O botao PRINT 50% gera uma imagem estatica usando o Cartridge selecionado,
 inclusive antes de salvar. A cor da barra continua sendo extraida do Hero.
+
+## Editor visual de loading por jogo
+
+A aba **EDITOR** mostra uma tela de loading em miniatura e permite mover e dimensionar seus elementos sem editar codigo.
+Clique num elemento para selecionar, arraste para reposicionar e arraste os cantos para redimensionar. A roda do mouse ajusta o tamanho do elemento selecionado. Atalhos: setas (1 px), Shift+setas (10 px), Delete (mostrar/ocultar), Ctrl+Z/Ctrl+Y (desfazer/refazer).
+Ha grade, snap de 10 px, alinhamento a esquerda/centro/direita/topo/meio/base, ajuste da fonte, opcoes de cores e camadas, restaurar um elemento ou o layout todo, e print de 50%.
+
+**O layout e individual por jogo**, salvo automaticamente em `app/Games/<ID>/loading_layout.json`, sem modificar `config.json` e sem publicar dados pessoais no Git. Esse JSON e carregado tanto pelo loading real quanto pelo PRINT 50%. Jogos antigos sem arquivo de layout usam as posicoes originais automaticamente. Os elementos editaveis sao Cartridge, plataforma, titulo, descricao, mensagem de loading, porcentagem, barra de progresso e etapa. O tema da interface nao interfere na cor da barra: ela continua usando a cor extraida do Hero.

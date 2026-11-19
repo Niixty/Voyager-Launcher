@@ -36,6 +36,7 @@ type managerState struct {
 	editFont           uintptr
 	windowW, windowH   int
 	mode               string
+	editor             layoutEditorState
 }
 
 var manager *managerState
@@ -103,11 +104,24 @@ func managerWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			m.click(int(x), int(y))
 		}
 		return 0
+	case WM_MOUSEMOVE:
+		if m != nil && m.tab==5 {
+			x,y:=wordXY(lp)
+			m.editorMouseMove(int(x),int(y))
+		}
+		return 0
+	case WM_LBUTTONUP:
+		if m != nil {m.editorMouseUp()}
+		return 0
+	case WM_KEYDOWN:
+		if m != nil && m.editorKey(wp){return 0}
 	case WM_MOUSEWHEEL:
 		if m != nil {
 			sx, sy := wordXY(lp) // coordinates are screen-relative for WM_MOUSEWHEEL
 			mouse := point{X: sx, Y: sy}
 			call(pScreenToClient, hwnd, uintptr(unsafe.Pointer(&mouse)))
+			delta:=int16((wp >> 16) & 0xffff)
+			if m.tab==5 && m.editorWheel(int(mouse.X),int(mouse.Y),delta){return 0}
 			bottom := m.windowH - 225
 			if mouse.X >= 17 && mouse.X < 255 && mouse.Y >= 168 && int(mouse.Y) < bottom {
 				rows := (m.windowH - 405) / 47
@@ -159,6 +173,7 @@ func (m *managerState) close() {
 	if m.grid != nil {
 		m.grid.close()
 	}
+	m.editorClear()
 	if m.cartridge != nil {
 		m.cartridge.close()
 	}
@@ -228,6 +243,7 @@ func (m *managerState) refreshCommands() {
 func (m *managerState) resetNew() {
 	m.activeID = ""
 	m.creating = true
+	m.editorClear()
 	m.mode = "retroarch"
 	m.heroPath = ""
 	m.gridPath = ""
@@ -266,6 +282,7 @@ func (m *managerState) load(id string) {
 		messageBox(m.hwnd, err.Error(), "Erro ao abrir jogo")
 		return
 	}
+	m.editorClear()
 	m.activeID = id
 	m.creating = false
 	m.mode = c.Mode
@@ -525,6 +542,7 @@ func (m *managerState) click(x, y int) {
 			return
 		}
 	}
+	if m.editorMouseDown(x,y){return}
 	for _, b := range m.buttons {
 		if b.has(x, y) {
 			m.action(b.key)
@@ -533,6 +551,7 @@ func (m *managerState) click(x, y int) {
 	}
 }
 func (m *managerState) action(key string) {
+	if m.editorAction(key) { return }
 	if m.settingsAction(key) { return }
 	switch key {
 	case "new":
@@ -579,8 +598,9 @@ func (m *managerState) action(key string) {
 		copyClipboard(m.hwnd, getText(m.inputs["Cover"]))
 		m.status = "Caminho da capa copiado"
 		invalid(m.hwnd)
-	case "tab0", "tab1", "tab2", "tab3", "tab4":
+	case "tab0", "tab1", "tab2", "tab3", "tab4", "tab5":
 		m.tab = int(key[3] - '0')
+		if m.tab==5 {m.editorEnsure()}
 		m.layout()
 		invalid(m.hwnd)
 	}
@@ -693,7 +713,9 @@ func (m *managerState) paint(p *painter) {
 	p.fill(22, 24, 4, 42, palette(appPrefs.Accent()))
 	p.text(310, 26, w-340, 24, "BIBLIOTECA DE JOGOS", 11, cMuted, true)
 	title := m.field("Title")
-	if m.tab == 4 {
+	if m.tab == 5 {
+        title = "Editor de loading"
+    } else if m.tab == 4 {
         title = "Configurações do Voyager"
     } else if title == "" {
         title = "Configuração do jogo"
@@ -701,7 +723,7 @@ func (m *managerState) paint(p *painter) {
 	p.text(310, 54, w-420, 54, title, 28, cWhite, true)
 	p.fill(w-269, 32, 229, 36, 0xff232329)
 	p.text(w-250, 39, 207, 23, "SUNSHINE  •  MOONLIGHT", 10, cMuted, true)
-	tabNames := []string{"JOGO", "IMAGENS", "EXECUÇÃO", "SUNSHINE", "AJUSTES"}
+	tabNames := []string{"JOGO", "IMAGENS", "EXECUÇÃO", "SUNSHINE", "AJUSTES", "EDITOR"}
 	x := 310
 	for i, t := range tabNames {
 		ww := 110
@@ -712,6 +734,7 @@ func (m *managerState) paint(p *painter) {
 			ww = 124
 		}
         if i == 4 { ww = 110 }
+        if i == 5 { ww = 95 }
 		selected := m.tab == i
 		if selected {
 			p.fill(x, 128, ww, 40, 0xff34343a)
@@ -745,7 +768,7 @@ func (m *managerState) paint(p *painter) {
 		p.text(left+8, 581, full-20, 38, "A tela de loading termina 1 segundo depois da janela do jogo ficar visível.", 12, cMuted, false)
 	case 1:
 		section("Identidade visual do jogo")
-		p.text(331, 224, w-400, 36, "HERO: fundo do loading  •  GRID: capa do Moonlight  •  CARTRIDGE: reservado.", 12, cMuted, false)
+		p.text(331, 224, w-400, 36, "HERO: fundo do loading  •  GRID: capa do Moonlight  •  CARTRIDGE: imagem no editor.", 12, cMuted, false)
 		gap := 14
 		colWidth := (full - 16 - 2*gap) / 3
 		for i, item := range []struct {
@@ -754,7 +777,7 @@ func (m *managerState) paint(p *painter) {
 		}{
 			{"hero", "HERO  •  1920 x 620", "SELECIONAR HERO", m.heroPath, "Fundo do loading", m.hero},
 			{"grid", "GRID  •  600 x 900", "SELECIONAR GRID", m.gridPath, "Capa para o Moonlight", m.grid},
-			{"cartridge", "CARTRIDGE  •  1536 x 1024", "SELECIONAR CARTRIDGE", m.cartridgePath, "Ainda não exibido no loading", m.cartridge},
+			{"cartridge", "CARTRIDGE  •  1536 x 1024", "SELECIONAR CARTRIDGE", m.cartridgePath, "Elemento do loading, ajustável no editor", m.cartridge},
 		} {
 			x := left + 8 + i*(colWidth+gap)
 			label(x, 263, item.title)
@@ -794,6 +817,8 @@ func (m *managerState) paint(p *painter) {
 			fieldRect(left+8, 596, full-20, 35)
 			p.text(left+8, 635, full-24, 31, "Para launchers que abrem outro executável, informe o nome do processo real.", 11, cMuted, false)
 		}
+	case 5:
+		m.paintEditor(p)
 	case 4:
         m.paintSettings(p)
     case 3:
@@ -813,7 +838,9 @@ func (m *managerState) paint(p *painter) {
 	bw := 135
 	gap := 9
 	right := w - 24
-	if m.tab == 4 {
+	if m.tab == 5 {
+        m.paintEditorFooter(p,right,h)
+    } else if m.tab == 4 {
         m.paintSettingsFooter(p, right, h)
     } else {
         m.btn(p, "save", "SALVAR", right-(bw+gap)*4, h-72, bw, 44, true)

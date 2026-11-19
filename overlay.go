@@ -19,6 +19,7 @@ import (
 
 	"voyager/native/internal/appearance"
 	"voyager/native/internal/heroaccent"
+	ll "voyager/native/internal/loadinglayout"
 )
 
 // Native Win32 overlay. No PowerShell, Windows Forms, browser or .NET runtime.
@@ -36,6 +37,7 @@ type overlayState struct {
 	windows                            []uintptr
 	cartridge, background              *img
 	accent                             uint32
+	layout                             ll.Layout
 	percent                            int
 	phase, detail                      string
 	started, ready, fadeAt, timeFailed time.Time
@@ -78,7 +80,7 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		if overlay != nil {
 			rc := client(hwnd)
 			p := paintFromHDC(hdc)
-			drawOverlay(p, overlay.cfg, int(rc.w()), int(rc.h()), overlay.percent, overlay.phase, overlay.detail, overlay.cartridge, overlay.background, overlay.accent, overlay.cartridgeOffset(), overlay.fail != "")
+			drawOverlay(p, overlay.cfg, 0, 0, int(rc.w()), int(rc.h()), overlay.percent, overlay.phase, overlay.detail, overlay.cartridge, overlay.background, overlay.accent, overlay.cartridgeOffset(), overlay.layout, overlay.fail != "")
 			p.close()
 		}
 		call(pEndPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
@@ -107,71 +109,81 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 	}
 	return call(pDefWindowProc, hwnd, uintptr(m), wp, lp)
 }
-func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail string, cartridge, background *img, heroColor uint32, bounceY float64, failed bool) {
-	if w < 1 || h < 1 {
-		return
-	}
-	p.clear(palette(overlayTheme.Color("background")))
-	if background != nil {
-		p.imageCover(background, 0, 0, w, h)
-	}
-	p.fill(0, 0, w, h, palette(overlayTheme.Color("dimOverlay")))
-	// UI anchored to 1600 x 900 reference and centered at any monitor size.
-	s := math.Min(float64(w)/1600, float64(h)/900)
-	if s < .28 {
-		s = .28
-	}
-	if s > 2.6 {
-		s = 2.6
-	}
-	cx, cy := float64(w)/2, float64(h)/2
-	X := func(v float64) int { return int(math.Round(cx + v*s)) }
-	Y := func(v float64) int { return int(math.Round(cy + v*s)) }
-	D := func(v float64) int { return int(math.Max(1, math.Round(v*s))) }
-	T := func(x, y, ww, hh float64, txt string, size float32, c palette, bold bool) {
-		p.text(X(x), Y(y), D(ww), D(hh), txt, size*float32(s), c, bold)
-	}
-	if heroColor == 0 { heroColor = heroaccent.Neutral }
-	// The area formerly occupied by the Grid cover now shows the Cartridge.
-	// Contain preserves the cartridge proportions and PNG transparency.
-	// No black backing panel or cover border is drawn over its transparent areas.
-	if cartridge != nil {
-		p.imageContain(cartridge, X(-635), Y(-224+bounceY), D(305), D(411))
-	}
-	T(-274, -207, 810, 33, strings.ToUpper(c.Platform), 15, palette(overlayTheme.Color("platform")), false)
-	T(-274, -150, 845, 120, c.Title, 43, palette(overlayTheme.Color("gameTitle")), true)
-	if len(c.Description) > 270 {
-		c.Description = c.Description[:270]
-	}
-	if appPrefs.ShowDescription {
-        T(-274, 15, 790, 85, c.Description, 19, palette(overlayTheme.Color("description")), false)
-    }
-	heading := overlayTheme.LoadingTitle
-	statusColor := palette(overlayTheme.Color("heading"))
-	if failed {
-		heading = overlayTheme.FailureTitle
-		statusColor = palette(overlayTheme.Color("headingError"))
-	}
-	T(-274, 124, 615, 43, heading, 25, statusColor, false)
-	if appPrefs.ShowPercentage {
-        T(477, 130, 125, 38, fmt.Sprintf("%d%%", percent), 21, palette(overlayTheme.Color("percentage")), false)
-    }
-	p.fill(X(-274), Y(184), D(865), D(6), palette(overlayTheme.Color("progressTrack")))
-	fillColor := palette(heroColor)
-	if failed {
-		fillColor = palette(overlayTheme.Color("progressError"))
-	}
-	if percent > 0 {
-		p.fill(X(-274), Y(184), D(865*float64(percent)/100), D(6), fillColor)
-	}
-	if phase == "" {
-		phase = "Preparando o jogo"
-	}
-	if failed {
-		phase = detail
-	}
-	if appPrefs.ShowPhase || failed {
-        T(-274, 201, 865, 40, phase, 15, palette(overlayTheme.Color("status")), false)
+func drawOverlay(p *painter, c gameConfig, originX, originY, w, h, percent int, phase, detail string, cartridge, background *img, heroColor uint32, bounceY float64, layout ll.Layout, failed bool) {
+    if w<1 || h<1 {return}
+    p.fill(originX,originY,w,h,palette(overlayTheme.Color("background")))
+    if background!=nil {p.imageCover(background,originX,originY,w,h)}
+    p.fill(originX,originY,w,h,palette(overlayTheme.Color("dimOverlay")))
+    s:=math.Min(float64(w)/ll.VirtualWidth,float64(h)/ll.VirtualHeight)
+    if s>2.6{s=2.6}
+    if s<=0{return}
+    left:=float64(originX)+float64(w-1600*s)/2
+    top:=float64(originY)+float64(h-900*s)/2
+    X:=func(v float64)int{return int(math.Round(left+v*s))}
+    Y:=func(v float64)int{return int(math.Round(top+v*s))}
+    D:=func(v float64)int{return int(math.Max(1,math.Round(v*s)))}
+    if heroColor==0 {heroColor=heroaccent.Neutral}
+    if phase==""{phase="Preparando o jogo"}
+    if failed{phase=detail}
+    description:=[]rune(c.Description)
+    if len(description)>270{description=description[:270]}
+    for _,n:=range layout.Elements {
+        if !n.Visible && !(failed && n.ID==ll.Phase){continue}
+        xx,yy,ww,hh:=X(n.X),Y(n.Y),D(n.W),D(n.H)
+        if n.ID==ll.Cartridge {
+            if cartridge!=nil {p.imageContain(cartridge,xx,Y(n.Y+bounceY),ww,hh)}
+            continue
+        }
+        if n.ID==ll.Progress {
+            height:=hh
+            if height<2 {height=2}
+            p.fill(xx,yy,ww,height,palette(overlayTheme.Color("progressTrack")))
+            progressColor:=palette(heroColor)
+            if failed{progressColor=palette(overlayTheme.Color("progressError"))}
+            clamped:=percent
+            if clamped<0{clamped=0}
+            if clamped>100{clamped=100}
+            if clamped>0{p.fill(xx,yy,int(float64(ww)*float64(clamped)/100),height,progressColor)}
+            continue
+        }
+        var value string
+        var themeColor uint32
+        bold:=false
+        switch n.ID {
+        case ll.Platform:
+            value=strings.ToUpper(c.Platform)
+            themeColor=overlayTheme.Color("platform")
+        case ll.Title:
+            value=c.Title
+            themeColor=overlayTheme.Color("gameTitle")
+            bold=true
+        case ll.Description:
+            if !appPrefs.ShowDescription{continue}
+            value=string(description)
+            themeColor=overlayTheme.Color("description")
+        case ll.Heading:
+            value=overlayTheme.LoadingTitle
+            themeColor=overlayTheme.Color("heading")
+            if failed{value=overlayTheme.FailureTitle;themeColor=overlayTheme.Color("headingError")}
+        case ll.Percentage:
+            if !appPrefs.ShowPercentage{continue}
+            value=fmt.Sprintf("%d%%",percent)
+            themeColor=overlayTheme.Color("percentage")
+        case ll.Phase:
+            if !appPrefs.ShowPhase && !failed{continue}
+            value=phase
+            themeColor=overlayTheme.Color("status")
+        default:continue
+        }
+        switch n.Color {
+        case "white":themeColor=overlayTheme.Color("gameTitle")
+        case "muted":themeColor=overlayTheme.Color("status")
+        case "hero":themeColor=heroColor
+        }
+        if failed && (n.ID==ll.Heading || n.ID==ll.Phase) {
+            themeColor=overlayTheme.Color("headingError")
+        }
+        p.text(xx,yy,ww,hh,value,n.FontSize*float32(s),palette(themeColor),bold)
     }
 }
 func loadBlurry(src string) *img {
@@ -306,7 +318,8 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath, cartridgePath strin
 	if err != nil {
 		return "", err
 	}
-	drawOverlay(p, c, 1920, 1080, 50, "Preparando a tela do jogo", "", cartridge, bg, heroaccent.FromFile(heroPath), 0, false)
+	layout,_:=ll.Load(loadingLayoutFile(id))
+	drawOverlay(p, c, 0, 0, 1920, 1080, 50, "Preparando a tela do jogo", "", cartridge, bg, heroaccent.FromFile(heroPath), 0, layout, false)
 	p.close()
 	defer call(pGdipDisposeImage, bmp)
 	folder := knownPictures()
@@ -368,6 +381,7 @@ func (o *overlayState) invalidateAll() {
 	}
 }
 func (o *overlayState) run() error {
+	o.layout,_ = ll.Load(loadingLayoutFile(o.id))
 	overlay = o
 	defer func() {
 		overlay = nil
