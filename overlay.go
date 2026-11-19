@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"voyager/native/internal/appearance"
+	"voyager/native/internal/heroaccent"
 )
 
 // Native Win32 overlay. No PowerShell, Windows Forms, browser or .NET runtime.
@@ -25,9 +26,6 @@ var overlayTheme = appearance.Default()
 
 func loadOverlayTheme() {
     overlayTheme = appearance.Load(filepath.Join(rootDir, "themes", "default.json"))
-    accent := appPrefs.AccentHex()
-    overlayTheme.Colors["progressFill"] = accent
-    overlayTheme.Colors["brandDot"] = accent
     overlayTheme.Colors["dimOverlay"] = fmt.Sprintf("#%02X080A0C", appPrefs.BackgroundDim*255/100)
 }
 
@@ -37,6 +35,7 @@ type overlayState struct {
 	preview                            bool
 	windows                            []uintptr
 	cover, background                  *img
+	accent                             uint32
 	percent                            int
 	phase, detail                      string
 	started, ready, fadeAt, timeFailed time.Time
@@ -79,7 +78,7 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		if overlay != nil {
 			rc := client(hwnd)
 			p := paintFromHDC(hdc)
-			drawOverlay(p, overlay.cfg, int(rc.w()), int(rc.h()), overlay.percent, overlay.phase, overlay.detail, overlay.cover, overlay.background, overlay.fail != "")
+			drawOverlay(p, overlay.cfg, int(rc.w()), int(rc.h()), overlay.percent, overlay.phase, overlay.detail, overlay.cover, overlay.background, overlay.accent, overlay.fail != "")
 			p.close()
 		}
 		call(pEndPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
@@ -108,7 +107,7 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 	}
 	return call(pDefWindowProc, hwnd, uintptr(m), wp, lp)
 }
-func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail string, cover, background *img, failed bool) {
+func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail string, cover, background *img, heroColor uint32, failed bool) {
 	if w < 1 || h < 1 {
 		return
 	}
@@ -132,7 +131,8 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 	T := func(x, y, ww, hh float64, txt string, size float32, c palette, bold bool) {
 		p.text(X(x), Y(y), D(ww), D(hh), txt, size*float32(s), c, bold)
 	}
-	p.ellipse(X(-622), Y(-329), D(9), D(9), palette(overlayTheme.Color("brandDot")))
+	if heroColor == 0 { heroColor = heroaccent.Neutral }
+	p.ellipse(X(-622), Y(-329), D(9), D(9), palette(heroColor))
 	T(-600, -336, 330, 35, overlayTheme.Brand, 15, palette(overlayTheme.Color("brandText")), true)
 	p.fill(X(-615), Y(-216), D(274), D(411), 0x65000000)
 	p.fill(X(-621), Y(-224), D(274), D(411), 0xff1b1d20)
@@ -163,7 +163,7 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
         T(477, 130, 125, 38, fmt.Sprintf("%d%%", percent), 21, palette(overlayTheme.Color("percentage")), false)
     }
 	p.fill(X(-274), Y(184), D(865), D(6), palette(overlayTheme.Color("progressTrack")))
-	fillColor := palette(overlayTheme.Color("progressFill"))
+	fillColor := palette(heroColor)
 	if failed {
 		fillColor = palette(overlayTheme.Color("progressError"))
 	}
@@ -299,8 +299,8 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath string) (string, err
 	if cover != nil {
 		defer cover.close()
 	}
-	bg := loadImg(heroPath)
-    if appPrefs.BlurBackground { bg = loadBlurry(heroPath) }
+	var bg *img
+    if appPrefs.BlurBackground { bg = loadBlurry(heroPath) } else { bg = loadImg(heroPath) }
 	if bg != nil {
 		defer bg.close()
 	}
@@ -308,7 +308,7 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath string) (string, err
 	if err != nil {
 		return "", err
 	}
-	drawOverlay(p, c, 1920, 1080, 50, "Preparando a tela do jogo", "", cover, bg, false)
+	drawOverlay(p, c, 1920, 1080, 50, "Preparando a tela do jogo", "", cover, bg, heroaccent.FromFile(heroPath), false)
 	p.close()
 	defer call(pGdipDisposeImage, bmp)
 	folder := knownPictures()
@@ -375,11 +375,15 @@ func (o *overlayState) run() error {
 		}
 	}()
 	o.cover = loadImg(artworkPath(o.cfg, o.id, "grid"))
+	heroPath := artworkPath(o.cfg, o.id, "hero")
+	// Cor calculada uma unica vez, a partir da arte original do jogo.
+	// O tema escolhido em AJUSTES afeta somente a interface do gerenciador.
+	o.accent = heroaccent.FromFile(heroPath)
 	if appPrefs.BlurBackground {
-        o.background = loadBlurry(artworkPath(o.cfg, o.id, "hero"))
-    } else {
-        o.background = loadImg(artworkPath(o.cfg, o.id, "hero"))
-    }
+		o.background = loadBlurry(heroPath)
+	} else {
+		o.background = loadImg(heroPath)
+	}
 	if err := registerOverlayWindow(); err != nil {
 		return err
 	}

@@ -80,7 +80,7 @@ func (m *managerState) paintSettings(p *painter){
  title:=func(y int,t string){p.text(left+18,y,full-30,32,t,19,cWhite,true)}
  caption:=func(y int,t string){p.text(left+18,y,full-30,26,t,12,cMuted,false)}
  title(188,"Personalização do Voyager")
- caption(218,"Escolha a cor do gerenciador e da barra de progresso do loading.")
+ caption(218,"Escolha a cor da interface do gerenciador. O loading usa a cor da arte hero.")
  colWidth:=(full-58)/4
  if colWidth<120 {colWidth=120}
  for i,preset:=range settings.Presets {

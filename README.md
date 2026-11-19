@@ -58,8 +58,17 @@ O icone oficial fica em `app/assets/VoyagerLauncher.ico`, criado a partir da art
 
 ## Configurações (nova aba AJUSTES)
 
-A aba AJUSTES e o botao CONFIGURACOES na barra lateral permitem escolher tema **Cinza, Roxo, Verde, Vermelho, Azul, Laranja, Rosa ou Ciano**. A cor escolhida aparece nos destaques do gerenciador e na barra/identificacao do loading.
+A aba AJUSTES e o botao CONFIGURACOES na barra lateral permitem escolher tema **Cinza, Roxo, Verde, Vermelho, Azul, Laranja, Rosa ou Ciano**. A cor escolhida aparece **somente nos destaques do gerenciador**. A barra de progresso e o indicador do loading usam automaticamente uma cor extraida da imagem `hero.png` de cada jogo, independentemente do tema escolhido.
 
 Tambem e possivel mostrar/ocultar porcentagem, descricao, etapa atual, ligar/desligar o desfoque de fundo e escolher escurecimento leve, normal ou forte. Os botoes RESTAURAR, ATUALIZACOES, PRINT 50% e ABRIR APP ficam no rodape dessa aba.
 
 As escolhas sao salvas automaticamente em `app/settings.json` (ignorado pelo Git, preservado nas atualizacoes). `app/settings.example.json` documenta os valores iniciais. Mudar o codigo do menu gera novo EXE via Actions; mudar preferencias no menu nao exige recompilacao.
+
+### Cores da tela de loading por jogo
+
+- O tema do aplicativo (cinza, roxo, verde, vermelho etc.) modifica **apenas o gerenciador**.
+- Na tela de loading, a barra de progresso e o ponto de destaque usam a cor predominante mais viva da arte `hero.png` do jogo. Os pixels escuros, brancos ou pouco saturados sao desconsiderados para produzir uma cor visivel.
+- A cor e calculada uma vez por inicializacao, sem analisar a imagem em cada quadro.
+- O recurso `PRINT 50%` usa exatamente a mesma escolha de cor do loading real.
+- Se a imagem nao existir, estiver ilegivel ou for inteiramente cinza, usa um cinza neutro. O estado de erro continua vermelho.
+- O desfoque e o escurecimento do fundo continuam configuraveis separadamente, sem mudar a cor extraida do hero.

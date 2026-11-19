@@ -7,3 +7,5 @@ Os executaveis `VoyagerLauncher.exe` e `VoyagerUpdater.exe` sao compilados em Gi
 `Games/`, ROMs, capas e configuracoes pessoais tambem permanecem locais.
 
 Codigo Go: `overlay.go` (loading), `manager.go` (gerenciador), `update.go` (atualizacao), `internal/appearance` (tema).
+
+A cor de destaque do loading e calculada automaticamente a partir de `Games/<id>/hero.png`. O tema selecionado em Configurações altera apenas o gerenciador. Os textos e demais cores neutras continuam configuráveis em `themes/default.json`.
