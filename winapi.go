@@ -336,16 +336,17 @@ func fileDialogFilter(filter string) []uint16 {
 func openFile(hwnd uintptr, filter, initial string) string {
 	fs := fileDialogFilter(filter)
 	b := make([]uint16, 32768)
-	initialDir := initial
-	if initialDir == "" {
-		initialDir = ""
-	}
-	of := openFileName{Size: uint32(unsafe.Sizeof(openFileName{})), Owner: hwnd, Filter: uintptr(unsafe.Pointer(&fs[0])), File: uintptr(unsafe.Pointer(&b[0])), MaxFile: uint32(len(b)), Flags: OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_EXPLORER, Title: ptrStr("Selecionar arquivo")}
-	if initialDir != "" {
-		of.InitialDir = ptrStr(initialDir)
+	titleUTF16 := syscall.StringToUTF16("Selecionar arquivo")
+	// Keep these UTF-16 buffers referenced for the entire modal dialog lifetime:
+	// storing a Go pointer as uintptr alone does not keep it alive for the GC.
+	of := openFileName{Size: uint32(unsafe.Sizeof(openFileName{})), Owner: hwnd, Filter: uintptr(unsafe.Pointer(&fs[0])), File: uintptr(unsafe.Pointer(&b[0])), MaxFile: uint32(len(b)), Flags: OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_EXPLORER, Title: uintptr(unsafe.Pointer(&titleUTF16[0]))}
+	var initialUTF16 []uint16
+	if initial != "" {
+		initialUTF16 = syscall.StringToUTF16(initial)
+		of.InitialDir = uintptr(unsafe.Pointer(&initialUTF16[0]))
 	}
 	result := call(pGetOpenFileName, uintptr(unsafe.Pointer(&of)))
-	memoryKeep(fs, b, of)
+	memoryKeep(fs, b, titleUTF16, initialUTF16, of)
 	if result != 0 {
 		return syscall.UTF16ToString(b)
 	}
