@@ -5,10 +5,8 @@ package main
 import (
     "fmt"
     "math"
-    "os"
     "path/filepath"
     "strings"
-    "unsafe"
 
     ll "voyager/native/internal/loadinglayout"
     "voyager/native/internal/heroaccent"
