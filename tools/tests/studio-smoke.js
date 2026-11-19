@@ -84,6 +84,29 @@
       "Retornar à biblioteca",
     );
     await probe.Capture("biblioteca");
+    await api.CopyGame("Smoke", "Smoke2");
+    await library();
+    const buttons = Array.from({length: 16}, () => ({pressed:false}));
+    const pad = {mapping:"standard", connected:true, buttons, axes:[0, 0]};
+    Object.defineProperty(navigator, "getGamepads", {configurable:true, value:() => [pad]});
+    Object.defineProperty(document, "hasFocus", {configurable:true, value:() => true});
+    const launches = [];
+    const originalRun = api.Run;
+    api.Run = async (id, mode) => launches.push([id, mode]);
+    click("Big Picture");
+    await wait(() => document.querySelectorAll(".bp-card").length === 2, "Capas Big Picture");
+    buttons[15].pressed = true;
+    await wait(() => document.querySelectorAll(".bp-card")[1].matches(".selected"), "Direcional");
+    buttons[15].pressed = false;
+    buttons[0].pressed = true;
+    await wait(() => launches.length > 0, "Botão A");
+    await new Promise(r => setTimeout(r, 1150));
+    if (launches.length !== 1 || launches[0][0] !== "Smoke2" || launches[0][1] !== "--game")
+      throw Error("O botão A deve abrir uma vez o jogo selecionado");
+    buttons[0].pressed = false;
+    buttons[1].pressed = true;
+    await wait(() => !document.querySelector(".big-picture"), "Botão B");
+    api.Run = originalRun;
     await probe.Done("");
   } catch (e) {
     await probe.Done(String(e.stack || e));

@@ -38,6 +38,7 @@ type overlayState struct {
 	cartridge, background              *img
 	accent                             uint32
 	layout                             ll.Layout
+	scan                               chan uintptr
 	buffers                            map[uintptr]*overlayBackbuffer
 	percent                            int
 	phase, detail                      string
@@ -81,7 +82,7 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		if overlay != nil {
 			rc := client(hwnd)
 			// Present the complete frame instead of showing each redraw operation.
-			overlay.paintBuffered(hwnd,hdc,int(rc.w()),int(rc.h()))
+			overlay.paintBuffered(hwnd,hdc,int(rc.w()),int(rc.h()),ps.RcPaint)
 		}
 		call(pEndPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
 		return 0
@@ -447,7 +448,12 @@ func (o *overlayState) run() error {
 	}
 	// Request ~60 FPS while the loading is active; Windows may coalesce ticks.
 	// Detection stays throttled separately at ~160ms.
-	interval:=uintptr(16);if n:=o.layout.Find(ll.Cartridge);!appPrefs.AnimateCartridge||o.cartridge==nil||n==nil||!n.Visible{interval=50};call(pSetTimer,o.windows[0],1,interval,0)
+	interval:=uintptr(16);if n:=o.layout.Find(ll.Cartridge);!appPrefs.AnimateCartridge||o.cartridge==nil||n==nil||!n.Visible{interval=50}
+    if interval==16 {
+        clock:=syscall.NewLazyDLL("winmm.dll")
+        if call(clock.NewProc("timeBeginPeriod"),1)==0 {defer call(clock.NewProc("timeEndPeriod"),1)}
+    }
+    call(pSetTimer,o.windows[0],1,interval,0)
 	windowsLoop()
 	return nil
 }
@@ -728,7 +734,7 @@ func (o *overlayState) tick() {
 	}
 	// Refresh the floating Cartridge even when the loading percentage is unchanged.
 	if node:=o.layout.Find(ll.Cartridge); node!=nil && node.Visible && appPrefs.AnimateCartridge && o.cartridge != nil {
-		o.invalidateAll()
+		o.invalidateMotion()
 	}
 	// Do not call SetWindowPos at every animation frame: this can stall
 	// the compositor and create microstutter on fullscreen games.
@@ -738,11 +744,20 @@ func (o *overlayState) tick() {
 			call(pSetWindowPos, hw, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
 		}
 	}
-	if now.Sub(o.lastCheck) < 160*time.Millisecond {
-		return
-	}
-	o.lastCheck = now
-	candidate := o.findGameWindow()
+    var candidate uintptr
+    if o.scan==nil {
+        if now.Sub(o.lastCheck)<160*time.Millisecond{return}
+        o.lastCheck=now
+        o.scan=make(chan uintptr,1)
+        // Only the detector's immutable inputs cross the UI thread boundary.
+        detector:=overlayState{cfg:o.cfg, baseline:o.baseline, launchPID:o.launchPID, targetHWND:o.targetHWND, mainExe:o.mainExe, launchDir:o.launchDir}
+        go func(result chan<- uintptr){result<-detector.findGameWindow()}(o.scan)
+        return
+    }
+    select {
+    case candidate=<-o.scan: o.scan=nil
+    default: return
+    }
 	if candidate != 0 {
 		if o.targetHWND != candidate {
 			o.targetHWND = candidate

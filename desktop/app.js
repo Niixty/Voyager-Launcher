@@ -91,6 +91,7 @@ async function library() {
   if (token !== page) return;
   header(
     "Biblioteca",
+    btn("Big Picture", openBigPicture),
     btn("Importar", async () => {
       note((await api.Import()) + " jogo(s) importado(s)");
       await library();
