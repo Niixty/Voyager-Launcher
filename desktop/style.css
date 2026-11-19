@@ -350,3 +350,14 @@ pre {
     13px/1.5 Consolas,
     monospace;
 }
+.floating,
+.foreground {
+  position: absolute;
+  pointer-events: none;
+  object-fit: contain;
+}
+.foreground {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}

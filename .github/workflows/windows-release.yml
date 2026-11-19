@@ -55,6 +55,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Get-FileHash dist/VoyagerLauncher.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerLauncher.exe' | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
           (Get-FileHash dist/VoyagerUpdater.exe -Algorithm SHA256).Hash.ToLower() + '  VoyagerUpdater.exe' | Add-Content -Path dist/SHA256SUMS.txt -Encoding ascii
+      - name: Preparar runtime WebView2 no runner
+        shell: pwsh
+        run: |
+          $runtime = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application\*\msedgewebview2.exe" -ErrorAction SilentlyContinue
+          if (-not $runtime) {
+            $bootstrap = Join-Path $env:RUNNER_TEMP "WebView2Setup.exe"
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrap
+            if ((Get-AuthenticodeSignature $bootstrap).Status -ne 'Valid') { throw 'Assinatura inválida do instalador WebView2' }
+            $install = Start-Process $bootstrap -ArgumentList '/silent','/install' -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw "WebView2 setup: $($install.ExitCode)" }
+          }
       - name: Testar o gerenciador WebView2 no Windows
         run: node tools/tests/studio-smoke.mjs
       - uses: actions/upload-artifact@v4

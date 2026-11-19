@@ -305,12 +305,15 @@ func (s *Studio) Frame(id string, l ll.Layout) (string, error) {
 	if cart != nil {
 		defer cart.close()
 	}
+	return renderFrame(c, l.Normalize(), cart, bg, heroaccent.FromFile(hero), true)
+}
+func renderFrame(c gameConfig, l ll.Layout, cart, bg *img, accent uint32, paintBackground bool) (string, error) {
 	p, b, e := newBitmapGraphics(960, 540)
 	if e != nil {
 		return "", e
 	}
 	defer call(pGdipDisposeImage, b)
-	drawOverlay(p, c, 0, 0, 960, 540, 50, "Preparando a tela do jogo", "", cart, bg, heroaccent.FromFile(hero), 0, l.Normalize(), false)
+	drawOverlayPass(p, c, 0, 0, 960, 540, 50, "Preparando a tela do jogo", "", cart, bg, accent, 0, l, false, paintBackground)
 	p.close()
 	dir, e := os.MkdirTemp("", "voyager-preview-")
 	if e != nil {
@@ -396,4 +399,46 @@ func (s *Studio) PickArt() (map[string]string, error) {
 		return nil, e
 	}
 	return map[string]string{"path": p, "preview": "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)}, nil
+}
+
+// Only layout or artwork changes require rendering. WebView2 can then move the
+// transparent cartridge between the two cached native layers at display rate.
+func (s *Studio) AnimationLayers(id string, l ll.Layout) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, e := readConfig(id)
+	if e != nil {
+		return nil, e
+	}
+	l = l.Normalize()
+	hero := artworkPath(c, id, "hero")
+	var bg *img
+	if appPrefs.BlurBackground {
+		bg = loadBlurry(hero)
+	} else {
+		bg = loadImg(hero)
+	}
+	if bg != nil {
+		defer bg.close()
+	}
+	accent := heroaccent.FromFile(hero)
+	for i, n := range l.Elements {
+		if n.ID != ll.Cartridge {
+			continue
+		}
+		base, e := renderFrame(c, ll.Layout{Elements: l.Elements[:i]}, nil, bg, accent, true)
+		if e != nil {
+			return nil, e
+		}
+		above, e := renderFrame(c, ll.Layout{Elements: l.Elements[i+1:]}, nil, nil, accent, false)
+		if e != nil {
+			return nil, e
+		}
+		kind := "cartridge"
+		if artworkPath(c, id, kind) == "" {
+			kind = "grid"
+		}
+		return map[string]string{"base": base, "above": above, "kind": kind}, nil
+	}
+	return nil, errors.New("layout sem camada de cartucho")
 }

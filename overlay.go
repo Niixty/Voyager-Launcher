@@ -111,10 +111,15 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 	return call(pDefWindowProc, hwnd, uintptr(m), wp, lp)
 }
 func drawOverlay(p *painter, c gameConfig, originX, originY, w, h, percent int, phase, detail string, cartridge, background *img, heroColor uint32, bounceY float64, layout ll.Layout, failed bool) {
+ drawOverlayPass(p,c,originX,originY,w,h,percent,phase,detail,cartridge,background,heroColor,bounceY,layout,failed,true)
+}
+func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent int, phase, detail string, cartridge, background *img, heroColor uint32, bounceY float64, layout ll.Layout, failed,paintBackground bool) {
     if w<1 || h<1 {return}
-    p.fill(originX,originY,w,h,palette(overlayTheme.Color("background")))
-    if background!=nil {p.imageCover(background,originX,originY,w,h)}
-    p.fill(originX,originY,w,h,palette(overlayTheme.Color("dimOverlay")))
+    if paintBackground {
+        p.fill(originX,originY,w,h,palette(overlayTheme.Color("background")))
+        if background!=nil {p.imageCover(background,originX,originY,w,h)}
+        p.fill(originX,originY,w,h,palette(overlayTheme.Color("dimOverlay")))
+    }else{p.clear(0)}
     s:=math.Min(float64(w)/ll.VirtualWidth,float64(h)/ll.VirtualHeight)
     if s>2.6{s=2.6}
     if s<=0{return}

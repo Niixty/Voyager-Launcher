@@ -96,8 +96,24 @@ async function editor(g) {
       height: n.height / 9 + "%",
     });
   }
+  let parts = null,
+    floating = null,
+    raf = 0;
   function outlines() {
     stage.replaceChildren();
+    floating = null;
+    if (anim && parts) {
+      const n = doc.elements.find((x) => x.id === "cartridge");
+      if (n.visible) {
+        floating = image(g.ID, parts.kind);
+        floating.className = "floating";
+        position(floating, n);
+        stage.append(floating);
+      }
+      const ink = el("img", null, "foreground");
+      ink.src = parts.above;
+      stage.append(ink);
+    }
     if (grid) {
       const lines = el("div", null, "gridlines");
       for (let x = 100; x < 1600; x += 100) {
@@ -304,9 +320,13 @@ async function editor(g) {
     busy = true;
     const seq = rev;
     try {
-      const frame = await api.Frame(g.ID, doc);
+      const layers = anim ? await api.AnimationLayers(g.ID, doc) : null;
+      const frame = layers ? layers.base : await api.Frame(g.ID, doc);
       if (page === serial && seq === rev) {
+        parts = layers;
         stage.style.backgroundImage = "url(" + frame + ")";
+        outlines();
+        if (anim && !raf) raf = requestAnimationFrame(float);
       }
     } finally {
       busy = false;
@@ -338,36 +358,16 @@ async function editor(g) {
     }
   }
   main.onkeydown = keys;
-  // The native renderer supplies each sampled animation pose with the same layer ordering.
-  const start = performance.now();
-  const interval = setInterval(() => {
-    if (page !== serial) {
-      clearInterval(interval);
-      return;
-    }
-    if (anim && !busy && !drag) {
+  function float(time) {
+    raf = 0;
+    if (page !== serial || !anim) return;
+    if (floating) {
       const offset =
-        11 * Math.sin(((performance.now() - start) / 2900) * 2 * Math.PI);
-      const pose = structuredClone(doc);
-      pose.elements.find((n) => n.id === "cartridge").y += offset;
-      const seq = rev;
-      busy = true;
-      api
-        .Frame(g.ID, pose)
-        .then((frame) => {
-          if (anim && page === serial && seq === rev)
-            stage.style.backgroundImage = "url(" + frame + ")";
-        })
-        .catch((e) => {
-          anim = false;
-          note(e);
-        })
-        .finally(() => {
-          busy = false;
-          if (rev !== seq) requestFrame();
-        });
+        (11 * Math.sin((time / 2900) * 2 * Math.PI) * stage.clientHeight) / 900;
+      floating.style.transform = "translateY(" + offset + "px)";
     }
-  }, 150);
+    raf = requestAnimationFrame(float);
+  }
   const scope = options(
     [
       ["game", "Somente este jogo"],

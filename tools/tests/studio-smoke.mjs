@@ -1,5 +1,5 @@
 // Exercise the production WebView2 bridge in an isolated installation on Windows.
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -20,16 +20,41 @@ const p = spawn(exe, [], {
 });
 let socket;
 try {
-  let page;
+  let page,
+    targets = [];
   for (let i = 0; i < 100 && !page; i++) {
     if (p.exitCode !== null)
       throw Error("O gerenciador encerrou: " + p.exitCode);
     try {
-      page = (
-        await (await fetch("http://127.0.0.1:19327/json/list")).json()
-      ).find((t) => t.type === "page" && t.url.includes("wails"));
+      targets = await (await fetch("http://127.0.0.1:19327/json/list")).json();
+      page = targets.find((t) => t.type === "page" && t.url.includes("wails"));
     } catch {}
     if (!page) await pause(300);
+  }
+  if (!page) {
+    console.error(
+      "Páginas WebView",
+      targets.map((t) => [t.type, t.url]),
+    );
+    console.error(
+      execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          "Get-Process VoyagerLauncher,msedgewebview2 -ErrorAction SilentlyContinue | Select-Object Name,Id,MainWindowTitle | Out-String; exit 0",
+        ],
+        { encoding: "utf8" },
+      ),
+    );
+    const log = path.join(
+      process.env.LOCALAPPDATA,
+      "VoyagerLauncher",
+      "update-check.log",
+    );
+    console.error(
+      await fs.readFile(log, "utf8").catch(() => "Sem log de inicialização"),
+    );
   }
   assert.ok(page, "WebView2 do Voyager não abriu");
   socket = new WebSocket(page.webSocketDebuggerUrl);
