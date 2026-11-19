@@ -117,8 +117,8 @@ func drawOverlay(p *painter, c gameConfig, originX, originY, w, h, percent int, 
     s:=math.Min(float64(w)/ll.VirtualWidth,float64(h)/ll.VirtualHeight)
     if s>2.6{s=2.6}
     if s<=0{return}
-    left:=float64(originX)+float64(w-1600*s)/2
-    top:=float64(originY)+float64(h-900*s)/2
+    left:=float64(originX)+(float64(w)-1600*s)/2
+    top:=float64(originY)+(float64(h)-900*s)/2
     X:=func(v float64)int{return int(math.Round(left+v*s))}
     Y:=func(v float64)int{return int(math.Round(top+v*s))}
     D:=func(v float64)int{return int(math.Max(1,math.Round(v*s)))}
