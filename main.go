@@ -60,7 +60,7 @@ func main() {
 			exitLog(e)
 			return
 		}
-		path, e := previewScreenshot(c, id, artworkPath(c, id, "grid"), artworkPath(c, id, "hero"))
+		path, e := previewScreenshot(c, id, artworkPath(c, id, "grid"), artworkPath(c, id, "hero"), artworkPath(c, id, "cartridge"))
 		if e != nil {
 			exitLog(e)
 		} else {

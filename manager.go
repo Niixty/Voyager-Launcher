@@ -436,7 +436,7 @@ func (m *managerState) capturePreview() {
 	if c.Title == "" {
 		c.Title = id
 	}
-	path, err := previewScreenshot(c, id, m.gridPath, m.heroPath)
+	path, err := previewScreenshot(c, id, m.gridPath, m.heroPath, m.cartridgePath)
 	if err != nil {
 		messageBox(m.hwnd, err.Error(), "Erro ao gerar o print")
 		return

@@ -78,3 +78,14 @@ As escolhas sao salvas automaticamente em `app/settings.json` (ignorado pelo Git
 A aba IMAGENS tem agora Hero 1920x620, Grid 600x900 e Cartridge 1536x1024. O Cartridge e salvo em `app/Games/<ID>/cartridge.png`, redimensionado sem recorte e com transparencia, mas ainda **nao aparece no loading**.
 
 O dialogo de arquivos usa agora filtros Windows UTF-16 com separadores NUL preservados, evitando fechamento inesperado. O desenho do gerenciador passou para buffer duplo e o scroll so atua sobre a lista lateral de jogos para evitar piscadas.
+
+## Cartridge animado no loading
+
+O loading nao mostra mais os textos `VOYAGER` (topo) e `VOYAGER LAUNCHER` (rodape).
+O espaco antes usado pela capa Grid, na lateral esquerda, agora usa a imagem
+`app/Games/<ID>/cartridge.png`, preservando as proporcoes e transparencia.
+A imagem flutua suavemente para cima e para baixo (aprox. 8 px, ciclo de 2,6 s).
+A animacao para quando o loading termina; o comportamento de deteccao do jogo
+nao foi alterado. Se nao houver Cartridge, a Grid continua como fallback.
+O botao PRINT 50% gera uma imagem estatica usando o Cartridge selecionado,
+inclusive antes de salvar. A cor da barra continua sendo extraida do Hero.

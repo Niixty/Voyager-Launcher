@@ -34,7 +34,7 @@ type overlayState struct {
 	id                                 string
 	preview                            bool
 	windows                            []uintptr
-	cover, background                  *img
+	cartridge, background              *img
 	accent                             uint32
 	percent                            int
 	phase, detail                      string
@@ -78,7 +78,7 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		if overlay != nil {
 			rc := client(hwnd)
 			p := paintFromHDC(hdc)
-			drawOverlay(p, overlay.cfg, int(rc.w()), int(rc.h()), overlay.percent, overlay.phase, overlay.detail, overlay.cover, overlay.background, overlay.accent, overlay.fail != "")
+			drawOverlay(p, overlay.cfg, int(rc.w()), int(rc.h()), overlay.percent, overlay.phase, overlay.detail, overlay.cartridge, overlay.background, overlay.accent, overlay.cartridgeOffset(), overlay.fail != "")
 			p.close()
 		}
 		call(pEndPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
@@ -107,7 +107,7 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 	}
 	return call(pDefWindowProc, hwnd, uintptr(m), wp, lp)
 }
-func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail string, cover, background *img, heroColor uint32, failed bool) {
+func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail string, cartridge, background *img, heroColor uint32, bounceY float64, failed bool) {
 	if w < 1 || h < 1 {
 		return
 	}
@@ -132,18 +132,12 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 		p.text(X(x), Y(y), D(ww), D(hh), txt, size*float32(s), c, bold)
 	}
 	if heroColor == 0 { heroColor = heroaccent.Neutral }
-	p.ellipse(X(-622), Y(-329), D(9), D(9), palette(heroColor))
-	T(-600, -336, 330, 35, overlayTheme.Brand, 15, palette(overlayTheme.Color("brandText")), true)
-	p.fill(X(-615), Y(-216), D(274), D(411), 0x65000000)
-	p.fill(X(-621), Y(-224), D(274), D(411), 0xff1b1d20)
-	if cover != nil {
-		p.imageCover(cover, X(-621), Y(-224), D(274), D(411))
-	} else {
-		T(-615, -25, 265, 45, "CAPA DO JOGO", 17, cMuted, false)
+	// The area formerly occupied by the Grid cover now shows the Cartridge.
+	// Contain preserves the cartridge proportions and PNG transparency.
+	// No black backing panel or cover border is drawn over its transparent areas.
+	if cartridge != nil {
+		p.imageContain(cartridge, X(-635), Y(-224+bounceY), D(305), D(411))
 	}
-	// Cover border, responsive to video size.
-	p.fill(X(-621), Y(-224), D(274), D(1), palette(overlayTheme.Color("coverBorder")))
-	p.fill(X(-621), Y(186), D(274), D(1), palette(overlayTheme.Color("coverBorder")))
 	T(-274, -207, 810, 33, strings.ToUpper(c.Platform), 15, palette(overlayTheme.Color("platform")), false)
 	T(-274, -150, 845, 120, c.Title, 43, palette(overlayTheme.Color("gameTitle")), true)
 	if len(c.Description) > 270 {
@@ -179,7 +173,6 @@ func drawOverlay(p *painter, c gameConfig, w, h, percent int, phase, detail stri
 	if appPrefs.ShowPhase || failed {
         T(-274, 201, 865, 40, phase, 15, palette(overlayTheme.Color("status")), false)
     }
-	T(-622, 332, 370, 35, overlayTheme.Footer, 12, palette(overlayTheme.Color("footer")), false)
 }
 func loadBlurry(src string) *img {
 	if src == "" {
@@ -294,10 +287,15 @@ func simpleHash(s string) uint64 {
 	return h
 }
 
-func previewScreenshot(c gameConfig, id, gridPath, heroPath string) (string, error) {
-	cover := loadImg(gridPath)
-	if cover != nil {
-		defer cover.close()
+func previewScreenshot(c gameConfig, id, gridPath, heroPath, cartridgePath string) (string, error) {
+	// A newly selected Cartridge can be previewed even before saving the game.
+	// Older games fall back to their Grid cover until a Cartridge is configured.
+	cartridge := loadImg(cartridgePath)
+	if cartridge == nil {
+		cartridge = loadImg(gridPath)
+	}
+	if cartridge != nil {
+		defer cartridge.close()
 	}
 	var bg *img
     if appPrefs.BlurBackground { bg = loadBlurry(heroPath) } else { bg = loadImg(heroPath) }
@@ -308,7 +306,7 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath string) (string, err
 	if err != nil {
 		return "", err
 	}
-	drawOverlay(p, c, 1920, 1080, 50, "Preparando a tela do jogo", "", cover, bg, heroaccent.FromFile(heroPath), false)
+	drawOverlay(p, c, 1920, 1080, 50, "Preparando a tela do jogo", "", cartridge, bg, heroaccent.FromFile(heroPath), 0, false)
 	p.close()
 	defer call(pGdipDisposeImage, bmp)
 	folder := knownPictures()
@@ -347,6 +345,12 @@ func screenRects() []rect {
 	}
 	return result
 }
+// A subtle, continuous vertical bob: roughly 8 reference pixels, 2.6 s per cycle.
+func (o *overlayState) cartridgeOffset() float64 {
+	if o.started.IsZero() { return 0 }
+	return 8 * math.Sin(time.Since(o.started).Seconds() * (2 * math.Pi / 2.6))
+}
+
 func (o *overlayState) stop() {
 	if len(o.windows) == 0 {
 		return
@@ -367,14 +371,18 @@ func (o *overlayState) run() error {
 	overlay = o
 	defer func() {
 		overlay = nil
-		if o.cover != nil {
-			o.cover.close()
+		if o.cartridge != nil {
+			o.cartridge.close()
 		}
 		if o.background != nil {
 			o.background.close()
 		}
 	}()
-	o.cover = loadImg(artworkPath(o.cfg, o.id, "grid"))
+	// The loaded cartridge is per-game; keep Grid as a fallback for older configs.
+	o.cartridge = loadImg(artworkPath(o.cfg, o.id, "cartridge"))
+	if o.cartridge == nil {
+		o.cartridge = loadImg(artworkPath(o.cfg, o.id, "grid"))
+	}
 	heroPath := artworkPath(o.cfg, o.id, "hero")
 	// Cor calculada uma unica vez, a partir da arte original do jogo.
 	// O tema escolhido em AJUSTES afeta somente a interface do gerenciador.
@@ -413,7 +421,9 @@ func (o *overlayState) run() error {
 		o.phase = o.fail
 		o.invalidateAll()
 	}
-	call(pSetTimer, o.windows[0], 1, 100, 0)
+	// 40ms keeps the floating animation smooth without changing the
+	// existing throttled (~160ms) game-window detection.
+	call(pSetTimer, o.windows[0], 1, 40, 0)
 	windowsLoop()
 	return nil
 }
@@ -702,6 +712,10 @@ func (o *overlayState) tick() {
 			o.stop()
 		}
 		return
+	}
+	// Refresh the floating Cartridge even when the loading percentage is unchanged.
+	if o.cartridge != nil {
+		o.invalidateAll()
 	}
 	// Fullscreen and borderless games can steal the Z-order while switching video modes.
 	for _, hw := range o.windows {
