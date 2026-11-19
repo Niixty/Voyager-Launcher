@@ -421,7 +421,7 @@ func (o *overlayState) run() error {
 	screens := screenRects()
 	instance := call(pGetModuleHandle, 0)
 	for _, r := range screens {
-		h := call(pCreateWindow, WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_LAYERED, uintptr(unsafe.Pointer(overlayClassName)), ptrStr(""), WS_POPUP|WS_VISIBLE, uintptr(r.Left), uintptr(r.Top), uintptr(r.w()), uintptr(r.h()), 0, 0, instance, 0)
+		h := call(pCreateWindow, WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_LAYERED, uintptr(unsafe.Pointer(overlayClassName)), uintptr(wide("")), WS_POPUP|WS_VISIBLE, uintptr(r.Left), uintptr(r.Top), uintptr(r.w()), uintptr(r.h()), 0, 0, instance, 0)
 		if h == 0 {
 			continue
 		}

@@ -3,6 +3,7 @@
 package main
 
 import (
+ "strings"
 	"fmt"
 	"runtime"
 	"syscall"
@@ -267,15 +268,16 @@ var (
 	pGdipSetTextRenderingHint    = gdip.NewProc("GdipSetTextRenderingHint")
 )
 
+//go:uintptrescapes
 func call(p *syscall.LazyProc, a ...uintptr) uintptr { r, _, _ := p.Call(a...); return r }
-func ptrStr(s string) uintptr                        { return uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(s))) }
+func wide(s string) unsafe.Pointer {return unsafe.Pointer(syscall.StringToUTF16Ptr(strings.ReplaceAll(s,"\x00","�")))}
 func utf16zero(p []uint16) string                    { return syscall.UTF16ToString(p) }
 func loword(v uintptr) uint16                        { return uint16(v & 0xFFFF) }
 func wordXY(v uintptr) (int32, int32) {
 	return int32(int16(v & 0xFFFF)), int32(int16((v >> 16) & 0xFFFF))
 }
 func show(hwnd uintptr, how int)     { call(pShowWindow, hwnd, uintptr(how)) }
-func setText(hwnd uintptr, s string) { call(pSetWindowText, hwnd, ptrStr(s)) }
+func setText(hwnd uintptr, s string) { call(pSetWindowText, hwnd, uintptr(wide(s))) }
 func getText(hwnd uintptr) string {
 	if hwnd == 0 {
 		return ""
@@ -303,7 +305,7 @@ func setDarkTitle(hwnd uintptr) {
 	}
 }
 func messageBox(hwnd uintptr, msg, title string) {
-	call(u32.NewProc("MessageBoxW"), hwnd, ptrStr(msg), ptrStr(title), 0x40)
+	call(u32.NewProc("MessageBoxW"), hwnd, uintptr(wide(msg)), uintptr(wide(title)), 0x40)
 }
 func windowsLoop() {
 	var m msg
@@ -379,7 +381,7 @@ func expandWindows(s string) string {
 		return ""
 	}
 	b := make([]uint16, 32768)
-	r := call(pExpandEnv, ptrStr(s), uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)))
+	r := call(pExpandEnv, uintptr(wide(s)), uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)))
 	if r == 0 || r >= uintptr(len(b)) {
 		return osExpandFallback(s)
 	}

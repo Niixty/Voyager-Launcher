@@ -70,7 +70,7 @@ jobs:
             if ($install.ExitCode -ne 0) { throw "WebView2 setup: $($install.ExitCode)" }
           }
       - name: Testar o gerenciador WebView2 no Windows
-        run: node tools/tests/studio-smoke.mjs
+        run: go test -vet=off -tags production,native_webview2loader,studioacceptance -timeout 150s -run TestStudioAcceptance -v .
       - uses: actions/upload-artifact@v4
         with:
           name: Voyager-Interface

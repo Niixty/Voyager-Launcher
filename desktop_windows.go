@@ -47,13 +47,16 @@ func newStudio() error {
 		return err
 	}
 	s := &Studio{}
-	return wails.Run(&options.App{Title: "Voyager Launcher", Width: 1240, Height: 820, MinWidth: 700, MinHeight: 520,
+	return wails.Run(studioOptions(s, assets))
+}
+func studioOptions(s *Studio, assets fs.FS) *options.App {
+	return &options.App{Title: "Voyager Launcher", Width: 1240, Height: 820, MinWidth: 700, MinHeight: 520,
 		BackgroundColour: options.NewRGB(18, 20, 25), AssetServer: &assetserver.Options{Assets: assets, Handler: http.HandlerFunc(serveArtwork)}, Bind: []interface{}{s},
 		OnStartup: func(ctx context.Context) {
 			s.ctx = ctx
 			go func() { _, err := checkAndStageUpdate(); logSilentUpdateError(err) }()
 		},
-		OnShutdown: func(context.Context) { logSilentUpdateError(launchPendingUpdate()) }})
+		OnShutdown: func(context.Context) { logSilentUpdateError(launchPendingUpdate()) }}
 }
 func artKind(k string) bool { return k == "hero" || k == "grid" || k == "cartridge" }
 func serveArtwork(w http.ResponseWriter, r *http.Request) {

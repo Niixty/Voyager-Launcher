@@ -194,7 +194,7 @@ func newManager() error {
 	if call(pRegisterClass, uintptr(unsafe.Pointer(&wc))) == 0 {
 		return winError("erro ao registrar interface")
 	}
-	hwnd := call(pCreateWindow, 0, uintptr(unsafe.Pointer(managerClassName)), ptrStr("Voyager Launcher"), WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN, 80, 65, 1280, 810, 0, 0, instance, 0)
+	hwnd := call(pCreateWindow, 0, uintptr(unsafe.Pointer(managerClassName)), uintptr(wide("Voyager Launcher")), WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN, 80, 65, 1280, 810, 0, 0, instance, 0)
 	if hwnd == 0 {
 		return winError("erro ao criar janela")
 	}
@@ -202,7 +202,7 @@ func newManager() error {
 	setDarkTitle(hwnd)
 	m.darkBrush = call(pCreateSolidBrush, 0x00262222)
 	negHeight := int32(-19)
-	m.editFont = call(pCreateFont, uintptr(negHeight), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, ptrStr("Segoe UI"))
+	m.editFont = call(pCreateFont, uintptr(negHeight), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, uintptr(wide("Segoe UI")))
 	for _, k := range editKeys {
 		flags := uintptr(WS_CHILD | ES_AUTOHSCROLL | WS_TABSTOP)
 		if k == "Description" || k == "Command" {
@@ -211,7 +211,7 @@ func newManager() error {
 		if k == "Command" || k == "Cover" {
 			flags |= ES_READONLY
 		}
-		handle := call(pCreateWindow, 0, ptrStr("EDIT"), ptrStr(""), flags, 0, 0, 100, 35, hwnd, 0, instance, 0)
+		handle := call(pCreateWindow, 0, uintptr(wide("EDIT")), uintptr(wide("")), flags, 0, 0, 100, 35, hwnd, 0, instance, 0)
 		m.inputs[k] = handle
 		call(pSendMessage, handle, WM_SETFONT, m.editFont, 1)
 	}
@@ -472,7 +472,7 @@ func (m *managerState) exploreFolder() {
 		messageBox(m.hwnd, "Salve o jogo primeiro.", "Voyager")
 		return
 	}
-	call(pShellExecute, m.hwnd, ptrStr("open"), ptrStr(folder), 0, 0, SW_SHOWNORMAL)
+	call(pShellExecute, m.hwnd, uintptr(wide("open")), uintptr(wide(folder)), 0, 0, SW_SHOWNORMAL)
 }
 func (m *managerState) importOld() {
 	file := openFile(m.hwnd, "Configuração do jogo\x00config.json\x00Todos (*.*)\x00*.*\x00", rootDir)

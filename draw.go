@@ -62,7 +62,7 @@ func loadImg(path string) *img {
 		return nil
 	}
 	var h uintptr
-	if call(pGdipLoadImage, ptrStr(path), uintptr(unsafe.Pointer(&h))) != 0 || h == 0 {
+	if call(pGdipLoadImage, uintptr(wide(path)), uintptr(unsafe.Pointer(&h))) != 0 || h == 0 {
 		return nil
 	}
 	var w, hh uint32
@@ -128,7 +128,7 @@ func (p *painter) text(x, y, w, h int, s string, size float32, c palette, bold b
 		return
 	}
 	var family, font, brush uintptr
-	call(pGdipCreateFontFamily, ptrStr("Segoe UI"), 0, uintptr(unsafe.Pointer(&family)))
+	call(pGdipCreateFontFamily, uintptr(wide("Segoe UI")), 0, uintptr(unsafe.Pointer(&family)))
 	if family == 0 {
 		return
 	}
@@ -202,7 +202,7 @@ func savePNG(bmp uintptr, dest string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
-	rc := call(pGdipSaveImage, bmp, ptrStr(dest), uintptr(unsafe.Pointer(&encoder)), 0)
+	rc := call(pGdipSaveImage, bmp, uintptr(wide(dest)), uintptr(unsafe.Pointer(&encoder)), 0)
 	if rc != 0 {
 		return fmt.Errorf("falha ao gravar PNG: status %d", rc)
 	}
