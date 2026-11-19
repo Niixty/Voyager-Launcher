@@ -30,8 +30,8 @@ type managerState struct {
 	inputs             map[string]uintptr
 	labels             map[string]clickable
 	buttons            []clickable
-	heroPath, gridPath string
-	hero, grid         *img
+	heroPath, gridPath, cartridgePath string
+	hero, grid, cartridge         *img
 	darkBrush          uintptr
 	editFont           uintptr
 	windowW, windowH   int
@@ -61,9 +61,7 @@ func managerWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			r := client(hwnd)
 			m.windowW = int(r.w())
 			m.windowH = int(r.h())
-			p := paintFromHDC(hdc)
-			m.paint(p)
-			p.close()
+			m.paintBuffered(hdc)
 		}
 		call(pEndPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
 		return 0
@@ -107,17 +105,24 @@ func managerWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		return 0
 	case WM_MOUSEWHEEL:
 		if m != nil {
-			x, y := wordXY(lp)
-			_ = x
-			_ = y
-			delta := int16((wp >> 16) & 0xffff)
-			if delta > 0 && m.scroll > 0 {
-				m.scroll--
+			sx, sy := wordXY(lp) // coordinates are screen-relative for WM_MOUSEWHEEL
+			mouse := point{X: sx, Y: sy}
+			call(pScreenToClient, hwnd, uintptr(unsafe.Pointer(&mouse)))
+			bottom := m.windowH - 225
+			if mouse.X >= 17 && mouse.X < 255 && mouse.Y >= 168 && int(mouse.Y) < bottom {
+				rows := (m.windowH - 405) / 47
+				if rows < 1 { rows = 1 }
+				maxScroll := len(m.ids) - rows
+				if maxScroll < 0 { maxScroll = 0 }
+				oldScroll := m.scroll
+				delta := int16((wp >> 16) & 0xffff)
+				if delta > 0 && m.scroll > 0 { m.scroll-- }
+				if delta < 0 && m.scroll < maxScroll { m.scroll++ }
+				if m.scroll != oldScroll {
+					region := rect{Left: 17, Top: 168, Right: 255, Bottom: int32(bottom)}
+					call(pInvalidate, hwnd, uintptr(unsafe.Pointer(&region)), 0)
+				}
 			}
-			if delta < 0 && m.scroll < len(m.ids)-1 {
-				m.scroll++
-			}
-			invalid(hwnd)
 		}
 		return 0
 	case WM_CLOSE:
@@ -153,6 +158,9 @@ func (m *managerState) close() {
 	}
 	if m.grid != nil {
 		m.grid.close()
+	}
+	if m.cartridge != nil {
+		m.cartridge.close()
 	}
 	if m.darkBrush != 0 {
 		call(pDeleteObject, m.darkBrush)
@@ -223,6 +231,11 @@ func (m *managerState) resetNew() {
 	m.mode = "retroarch"
 	m.heroPath = ""
 	m.gridPath = ""
+	m.cartridgePath = ""
+	if m.cartridge != nil {
+		m.cartridge.close()
+		m.cartridge = nil
+	}
 	if m.hero != nil {
 		m.hero.close()
 		m.hero = nil
@@ -279,6 +292,9 @@ func (m *managerState) load(id string) {
 	m.set("Process", c.WaitForProcess)
 	m.heroPath = artworkPath(c, id, "hero")
 	m.gridPath = artworkPath(c, id, "grid")
+	m.cartridgePath = artworkPath(c, id, "cartridge")
+	if m.cartridge != nil { m.cartridge.close() }
+	m.cartridge = loadImg(m.cartridgePath)
 	if m.hero != nil {
 		m.hero.close()
 	}
@@ -293,7 +309,7 @@ func (m *managerState) load(id string) {
 	invalid(m.hwnd)
 }
 func (m *managerState) readUI() gameConfig {
-	c := gameConfig{SchemaVersion: 6, Title: m.field("Title"), Platform: m.field("Platform"), CoreName: m.field("CoreName"), Description: getText(m.inputs["Description"]), Mode: m.mode, Hero: "hero.png", Grid: "grid.png", WaitForProcess: m.field("Process")}
+	c := gameConfig{SchemaVersion: 6, Title: m.field("Title"), Platform: m.field("Platform"), CoreName: m.field("CoreName"), Description: getText(m.inputs["Description"]), Mode: m.mode, Hero: "hero.png", Grid: "grid.png", Cartridge: "cartridge.png", WaitForProcess: m.field("Process")}
 	if m.mode == "retroarch" {
 		c.RetroarchPath = m.field("Exe")
 		c.CorePath = m.field("Core")
@@ -335,6 +351,12 @@ func (m *managerState) save() error {
 			}
 		}
 	}
+	// Preserve alpha and proportions. Cartridge does not appear in the loading yet.
+	if m.cartridgePath != "" {
+		if err := fitTransparentPNG(m.cartridgePath, filepath.Join(gameDir(id), "cartridge.png"), 1536, 1024); err != nil {
+			return fmt.Errorf("falha ao salvar Cartridge: %w", err)
+		}
+	}
 	m.ids = listGames()
 	m.load(id)
 	m.status = "Jogo salvo — configuração automática de carregamento"
@@ -346,18 +368,24 @@ func (m *managerState) selectArt(which string) {
 	if path == "" {
 		return
 	}
-	if which == "hero" {
-		m.heroPath = path
-		if m.hero != nil {
-			m.hero.close()
-		}
-		m.hero = loadImg(path)
-	} else {
-		m.gridPath = path
-		if m.grid != nil {
-			m.grid.close()
-		}
-		m.grid = loadImg(path)
+	switch which {
+	case "hero":
+		image := loadImg(path)
+		if image == nil { messageBox(m.hwnd, "Não foi possível abrir essa imagem.", "Hero"); return }
+		if m.hero != nil { m.hero.close() }
+		m.heroPath, m.hero = path, image
+	case "grid":
+		image := loadImg(path)
+		if image == nil { messageBox(m.hwnd, "Não foi possível abrir essa imagem.", "Grid"); return }
+		if m.grid != nil { m.grid.close() }
+		m.gridPath, m.grid = path, image
+	case "cartridge":
+		image := loadImg(path)
+		if image == nil { messageBox(m.hwnd, "Não foi possível abrir essa imagem.", "Cartridge"); return }
+		if m.cartridge != nil { m.cartridge.close() }
+		m.cartridgePath, m.cartridge = path, image
+	default:
+		return
 	}
 	m.status = "Imagem selecionada. Salve o jogo para aplicar"
 	invalid(m.hwnd)
@@ -525,6 +553,8 @@ func (m *managerState) action(key string) {
 		m.selectArt("hero")
 	case "grid":
 		m.selectArt("grid")
+	case "cartridge":
+		m.selectArt("cartridge")
 	case "browseexe":
 		m.selectExecutable("Exe")
 	case "browsecore":
@@ -715,19 +745,29 @@ func (m *managerState) paint(p *painter) {
 		p.text(left+8, 581, full-20, 38, "A tela de loading termina 1 segundo depois da janela do jogo ficar visível.", 12, cMuted, false)
 	case 1:
 		section("Identidade visual do jogo")
-		p.text(331, 224, w-400, 36, "O fundo recebe blur. A capa GRID é a mesma usada no Moonlight.", 12, cMuted, false)
-		hw := int(float64(full) * 0.62)
-		gridX := left + hw + 30
-		label(left+8, 263, "HERO  •  1920 x 620")
-		label(gridX, 263, "GRID  •  600 x 900")
-		p.fill(left+8, 294, hw-30, 202, cField)
-		p.fill(gridX, 294, full-hw-32, 266, cField)
-		p.imageCover(m.hero, left+8, 294, hw-30, 202)
-		p.imageContain(m.grid, gridX, 294, full-hw-32, 266)
-		m.btn(p, "hero", "SELECIONAR HERO", left+8, 509, hw-30, 44, false)
-		m.btn(p, "grid", "SELECIONAR GRID", gridX, 572, full-hw-32, 44, false)
-		p.text(left+8, 562, hw-40, 38, filepath.Base(m.heroPath), 11, cMuted, false)
-		p.text(gridX, 627, full-hw-32, 30, filepath.Base(m.gridPath), 11, cMuted, false)
+		p.text(331, 224, w-400, 36, "HERO: fundo do loading  •  GRID: capa do Moonlight  •  CARTRIDGE: reservado.", 12, cMuted, false)
+		gap := 14
+		colWidth := (full - 16 - 2*gap) / 3
+		for i, item := range []struct {
+			key, title, button, path, hint string
+			image *img
+		}{
+			{"hero", "HERO  •  1920 x 620", "SELECIONAR HERO", m.heroPath, "Fundo do loading", m.hero},
+			{"grid", "GRID  •  600 x 900", "SELECIONAR GRID", m.gridPath, "Capa para o Moonlight", m.grid},
+			{"cartridge", "CARTRIDGE  •  1536 x 1024", "SELECIONAR CARTRIDGE", m.cartridgePath, "Ainda não exibido no loading", m.cartridge},
+		} {
+			x := left + 8 + i*(colWidth+gap)
+			label(x, 263, item.title)
+			p.fill(x, 299, colWidth, 228, cField)
+			p.imageContain(item.image, x+4, 303, colWidth-8, 220)
+			m.btn(p, item.key, item.button, x, 540, colWidth, 44, false)
+			if item.path != "" {
+				p.text(x, 591, colWidth, 32, filepath.Base(item.path), 11, cMuted, false)
+			} else {
+				p.text(x, 591, colWidth, 32, "Nenhuma imagem selecionada", 11, cMuted, false)
+			}
+			p.text(x, 632, colWidth, 35, item.hint, 11, cMuted, false)
+		}
 	case 2:
 		section("Como iniciar o jogo")
 		label(left+8, 222, "TIPO DE EXECUÇÃO")

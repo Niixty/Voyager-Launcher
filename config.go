@@ -32,6 +32,7 @@ type gameConfig struct {
 	WaitForProcess   string `json:"waitForProcess,omitempty"`
 	Hero             string `json:"hero"`
 	Grid             string `json:"grid"`
+	Cartridge        string `json:"cartridge,omitempty"`
 }
 
 var validID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,70}$`)
@@ -82,6 +83,7 @@ func readConfig(id string) (gameConfig, error) {
 	if c.Hero == "" {
 		c.Hero = "hero.png"
 	}
+	if c.Cartridge == "" { c.Cartridge = "cartridge.png" }
 	return c, nil
 }
 func writeConfig(id string, c gameConfig) error {
@@ -110,6 +112,7 @@ func writeConfig(id string, c gameConfig) error {
 	c.SchemaVersion = 6
 	c.Hero = "hero.png"
 	c.Grid = "grid.png"
+	c.Cartridge = "cartridge.png"
 	// Preserve optional future metadata but remove all obsolete time fields.
 	doc := map[string]json.RawMessage{}
 	if data, err := os.ReadFile(configFile(id)); err == nil {
@@ -121,7 +124,7 @@ func writeConfig(id string, c gameConfig) error {
 	raw, _ := json.Marshal(c)
 	var typed map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &typed)
-	for _, k := range []string{"title", "platform", "coreName", "description", "mode", "retroarchPath", "corePath", "romPath", "executablePath", "shortcutPath", "arguments", "workingDirectory", "waitForProcess", "hero", "grid", "schemaVersion"} {
+	for _, k := range []string{"title", "platform", "coreName", "description", "mode", "retroarchPath", "corePath", "romPath", "executablePath", "shortcutPath", "arguments", "workingDirectory", "waitForProcess", "hero", "grid", "cartridge", "schemaVersion"} {
 		delete(doc, k)
 	}
 	for k, v := range typed {
@@ -158,6 +161,9 @@ func artworkPath(c gameConfig, id, which string) string {
 	if which == "grid" {
 		name = c.Grid
 		fallback = "logo.png"
+	} else if which == "cartridge" {
+		name = c.Cartridge
+		fallback = ""
 	}
 	preferred := which + ".png"
 	if _, err := os.Stat(filepath.Join(folder, preferred)); err == nil {
@@ -169,8 +175,10 @@ func artworkPath(c gameConfig, id, which string) string {
 			return p
 		}
 	}
-	if _, err := os.Stat(filepath.Join(folder, fallback)); err == nil {
-		return filepath.Join(folder, fallback)
+	if fallback != "" {
+		if _, err := os.Stat(filepath.Join(folder, fallback)); err == nil {
+			return filepath.Join(folder, fallback)
+		}
 	}
 	return ""
 }

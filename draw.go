@@ -235,6 +235,25 @@ func cropToPNG(src, dst string, w, h int) error {
 	}
 	return os.Rename(tmp, dst)
 }
+// fitTransparentPNG contains the cartridge without cropping, retaining alpha.
+func fitTransparentPNG(src, dst string, w, h int) error {
+	if src == "" { return nil }
+	if absPath(src) == absPath(dst) { return nil }
+	im := loadImg(src)
+	if im == nil { return fmt.Errorf("imagem Cartridge inválida: %s", src) }
+	defer im.close()
+	p, bmp, err := newBitmapGraphics(w, h)
+	if err != nil { return err }
+	p.clear(0x00000000)
+	p.imageContain(im, 0, 0, w, h)
+	p.close()
+	defer call(pGdipDisposeImage, bmp)
+	tmp := dst + ".tmp.png"
+	defer os.Remove(tmp)
+	if err := savePNG(bmp, tmp); err != nil { return err }
+	return os.Rename(tmp, dst)
+}
+
 func absPath(s string) string {
 	p, e := filepath.Abs(s)
 	if e != nil {

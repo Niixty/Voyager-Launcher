@@ -72,3 +72,9 @@ As escolhas sao salvas automaticamente em `app/settings.json` (ignorado pelo Git
 - O recurso `PRINT 50%` usa exatamente a mesma escolha de cor do loading real.
 - Se a imagem nao existir, estiver ilegivel ou for inteiramente cinza, usa um cinza neutro. O estado de erro continua vermelho.
 - O desfoque e o escurecimento do fundo continuam configuraveis separadamente, sem mudar a cor extraida do hero.
+
+## Cartridge, seletor de imagens e scroll
+
+A aba IMAGENS tem agora Hero 1920x620, Grid 600x900 e Cartridge 1536x1024. O Cartridge e salvo em `app/Games/<ID>/cartridge.png`, redimensionado sem recorte e com transparencia, mas ainda **nao aparece no loading**.
+
+O dialogo de arquivos usa agora filtros Windows UTF-16 com separadores NUL preservados, evitando fechamento inesperado. O desenho do gerenciador passou para buffer duplo e o scroll so atua sobre a lista lateral de jogos para evitar piscadas.

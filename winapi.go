@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"syscall"
+	"unicode/utf16"
 	"unsafe"
 )
 
@@ -211,6 +212,11 @@ var (
 	pSetTextColor                = g32.NewProc("SetTextColor")
 	pSetBkColor                  = g32.NewProc("SetBkColor")
 	pCreateSolidBrush            = g32.NewProc("CreateSolidBrush")
+	pCreateCompatibleDC         = g32.NewProc("CreateCompatibleDC")
+	pCreateCompatibleBitmap     = g32.NewProc("CreateCompatibleBitmap")
+	pSelectObject               = g32.NewProc("SelectObject")
+	pBitBlt                     = g32.NewProc("BitBlt")
+	pDeleteDC                   = g32.NewProc("DeleteDC")
 	pDeleteObject                = g32.NewProc("DeleteObject")
 	pCreateFont                  = g32.NewProc("CreateFontW")
 	pDwmSet                      = dwm.NewProc("DwmSetWindowAttribute")
@@ -219,6 +225,7 @@ var (
 	pSHGetKnownFolderPath        = sh32.NewProc("SHGetKnownFolderPath")
 	pCoTaskMemFree               = ole32.NewProc("CoTaskMemFree")
 	pGetOpenFileName             = comdlg.NewProc("GetOpenFileNameW")
+	pScreenToClient             = u32.NewProc("ScreenToClient")
 	pCreateSnapshot              = k32.NewProc("CreateToolhelp32Snapshot")
 	pProcessFirst                = k32.NewProc("Process32FirstW")
 	pProcessNext                 = k32.NewProc("Process32NextW")
@@ -316,9 +323,18 @@ func memoryKeep(x ...interface{}) {
 	}
 }
 
+// Win32 dialog filters contain embedded UTF-16 NUL separators.
+// syscall.StringToUTF16 panics on such text, so encode the runes directly.
+func fileDialogFilter(filter string) []uint16 {
+	encoded := utf16.Encode([]rune(filter))
+	if len(encoded) == 0 || encoded[len(encoded)-1] != 0 {
+		encoded = append(encoded, 0)
+	}
+	return append(encoded, 0)
+}
+
 func openFile(hwnd uintptr, filter, initial string) string {
-	// Win32 dialog filter separates entries by NUL (and has two NUL at the end).
-	fs := syscall.StringToUTF16(filter + "\x00")
+	fs := fileDialogFilter(filter)
 	b := make([]uint16, 32768)
 	initialDir := initial
 	if initialDir == "" {
@@ -328,7 +344,9 @@ func openFile(hwnd uintptr, filter, initial string) string {
 	if initialDir != "" {
 		of.InitialDir = ptrStr(initialDir)
 	}
-	if call(pGetOpenFileName, uintptr(unsafe.Pointer(&of))) != 0 {
+	result := call(pGetOpenFileName, uintptr(unsafe.Pointer(&of)))
+	memoryKeep(fs, b, of)
+	if result != 0 {
 		return syscall.UTF16ToString(b)
 	}
 	return ""
