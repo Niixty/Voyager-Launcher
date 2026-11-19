@@ -16,3 +16,6 @@
 
 # Preferências locais (arquivo de exemplo versionado)
 /app/settings.json
+
+# Layout global do usuario, salvo dentro da instalacao
+/app/loading_default.json

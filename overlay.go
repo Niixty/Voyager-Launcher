@@ -38,6 +38,7 @@ type overlayState struct {
 	cartridge, background              *img
 	accent                             uint32
 	layout                             ll.Layout
+	buffers                            map[uintptr]*overlayBackbuffer
 	percent                            int
 	phase, detail                      string
 	started, ready, fadeAt, timeFailed time.Time
@@ -79,9 +80,8 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		hdc := call(pBeginPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
 		if overlay != nil {
 			rc := client(hwnd)
-			p := paintFromHDC(hdc)
-			drawOverlay(p, overlay.cfg, 0, 0, int(rc.w()), int(rc.h()), overlay.percent, overlay.phase, overlay.detail, overlay.cartridge, overlay.background, overlay.accent, overlay.cartridgeOffset(), overlay.layout, overlay.fail != "")
-			p.close()
+			// Present the complete frame instead of showing each redraw operation.
+			overlay.paintBuffered(hwnd,hdc,int(rc.w()),int(rc.h()))
 		}
 		call(pEndPaint, hwnd, uintptr(unsafe.Pointer(&ps)))
 		return 0
@@ -94,6 +94,7 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		call(pDestroyWindow, hwnd)
 		return 0
 	case WM_DESTROY:
+		if overlay != nil {overlay.dropBuffer(hwnd)}
 		// The overlay group must close together; caller exits its dedicated message loop.
 		if overlay != nil && len(overlay.windows) > 0 && hwnd == overlay.windows[0] {
 			call(pPostQuitMessage, 0)
@@ -318,7 +319,7 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath, cartridgePath strin
 	if err != nil {
 		return "", err
 	}
-	layout,_:=ll.Load(loadingLayoutFile(id))
+	layout,_:=loadEffectiveLoadingLayout(id)
 	drawOverlay(p, c, 0, 0, 1920, 1080, 50, "Preparando a tela do jogo", "", cartridge, bg, heroaccent.FromFile(heroPath), 0, layout, false)
 	p.close()
 	defer call(pGdipDisposeImage, bmp)
@@ -381,9 +382,10 @@ func (o *overlayState) invalidateAll() {
 	}
 }
 func (o *overlayState) run() error {
-	o.layout,_ = ll.Load(loadingLayoutFile(o.id))
+	o.layout,_ = loadEffectiveLoadingLayout(o.id)
 	overlay = o
 	defer func() {
+		o.freeBuffers()
 		overlay = nil
 		if o.cartridge != nil {
 			o.cartridge.close()

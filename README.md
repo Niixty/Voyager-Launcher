@@ -97,3 +97,10 @@ Clique num elemento para selecionar, arraste para reposicionar e arraste os cant
 Ha grade, snap de 10 px, alinhamento a esquerda/centro/direita/topo/meio/base, ajuste da fonte, opcoes de cores e camadas, restaurar um elemento ou o layout todo, e print de 50%.
 
 **O layout e individual por jogo**, salvo automaticamente em `app/Games/<ID>/loading_layout.json`, sem modificar `config.json` e sem publicar dados pessoais no Git. Esse JSON e carregado tanto pelo loading real quanto pelo PRINT 50%. Jogos antigos sem arquivo de layout usam as posicoes originais automaticamente. Os elementos editaveis sao Cartridge, plataforma, titulo, descricao, mensagem de loading, porcentagem, barra de progresso e etapa. O tema da interface nao interfere na cor da barra: ela continua usando a cor extraida do Hero.
+
+## Layout padrao compartilhado e correção de flicker
+
+No editor, o botão **PADRÃO P/ TODOS** grava o layout atual em `app/loading_default.json` e aplica imediatamente a todos os jogos existentes. A configuração é herdada automaticamente por jogos novos. As configurações individuais continuam podendo ser editadas depois.
+Antes de substituir cada `Games/<ID>/loading_layout.json`, o app guarda uma cópia `loading_layout.json.before_global_<data>.json` na pasta do jogo. O padrão global e os backups são arquivos locais ignorados pelo Git.
+
+O loading real agora utiliza uma superfície de memória reutilizável por monitor e apresenta cada quadro completo de uma vez com BitBlt, sem exibir etapas parciais da pintura GDI+. Isso evita que o fundo e os textos pisquem durante a animação do cartucho. A detecção da janela do jogo, a barra de progresso e a transição final mantêm o comportamento anterior.

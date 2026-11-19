@@ -41,7 +41,7 @@ func (m *managerState) editorEnsure(){
     if m.activeID=="" || m.creating {return}
     if m.editor.gameID==m.activeID{return}
     m.editorClear()
-    layout,err:=ll.Load(loadingLayoutFile(m.activeID))
+    layout,err:=loadEffectiveLoadingLayout(m.activeID)
     if err!=nil { m.status="Layout inválido: usando posições padrão ("+err.Error()+")" }
     m.editor.doc=layout
     m.editor.gameID=m.activeID
@@ -263,6 +263,19 @@ func (m *managerState) editorAction(key string)bool{
     e:=&m.editor
     action:=strings.TrimPrefix(key,"layout:")
     if action=="save" {m.editorSave();invalid(m.hwnd);return true}
+    if action=="defaultall" {
+        if e.gameID=="" {return true}
+        updated,err:=applyDefaultLoadingLayout(e.doc)
+        if err!=nil {
+            m.status=fmt.Sprintf("Layout padrão salvo. %d jogos atualizados; falha em alguns: %v",updated,err)
+            messageBox(m.hwnd,m.status,"Padrão de loading")
+        }else{
+            m.status=fmt.Sprintf("Layout definido como padrão para %d jogos atuais e todos os futuros.",updated)
+            messageBox(m.hwnd,m.status,"Padrão de loading")
+        }
+        invalid(m.hwnd)
+        return true
+    }
     if action=="grid" {e.grid=!e.grid;invalid(m.hwnd);return true}
     if action=="snap" {e.snap=!e.snap;invalid(m.hwnd);return true}
     if action=="undo" {m.editorUndo();return true}
@@ -339,7 +352,7 @@ func (m *managerState) editorAction(key string)bool{
 }
 func (m *managerState) paintEditor(p *painter){
     p.text(326,186,m.windowW-370,35,"Editor visual do loading",21,cWhite,true)
-    p.text(326,213,m.windowW-370,27,"Arraste os elementos; use os cantos para redimensionar. Cada jogo guarda seu próprio layout.",11,cMuted,false)
+    p.text(326,213,m.windowW-370,27,"Arraste os elementos pelos cantos. Use PADRÃO P/ TODOS para os jogos atuais e futuros.",11,cMuted,false)
     m.editorEnsure()
     if m.editor.gameID==""{
         p.text(334,300,m.windowW-400,80,"Salve um jogo na aba JOGO para começar a editar a tela de loading.",16,cWhite,false)
@@ -440,11 +453,12 @@ func (m *managerState) paintEditor(p *painter){
     }
 }
 func (m *managerState) paintEditorFooter(p *painter,right,h int){
-    width:=138
-    gap:=9
+    width:=124
+    gap:=8
     opts:=[]struct{id,text string;sel bool}{
         {"resetall","REDEFINIR",false},{"edittext","EDITAR TEXTOS",false},
-        {"preview","PRINT 50%",false},{"save","SALVAR LAYOUT",true},
+        {"preview","PRINT 50%",false},{"save","SALVAR LAYOUT",false},
+        {"defaultall","PADRÃO P/ TODOS",true},
     }
     for i,o:=range opts{
         m.btn(p,"layout:"+o.id,o.text,right-(len(opts)-i)*(width+gap),h-72,width,44,o.sel)
