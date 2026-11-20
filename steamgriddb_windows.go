@@ -291,7 +291,10 @@ func (s *Studio) ApplySteamGridImage(id,kind,assetURL string) error {
     output,err:=os.CreateTemp(dir,".steamgrid-output-*.png")
     if err!=nil{return err}
     candidate:=output.Name()
-    output.Close()
+    if err=output.Close();err!=nil{return err}
+    // GDI+ writes to candidate via a temporary PNG + rename. On Windows,
+    // renaming over an existing placeholder fails, so remove it first.
+    if err=os.Remove(candidate);err!=nil{return err}
     defer os.Remove(candidate)
     width,height:=600,900
     if kind=="hero" {width,height=1920,620}
