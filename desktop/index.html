@@ -25,9 +25,11 @@
     </aside>
     <main id="main"></main>
     <output role="status" id="notice" hidden></output>
-    <script src="app.js"></script>
+    <!-- Register all controller graphics and views before starting the app.
+         app.js calls library() asynchronously and needs both view functions. -->
     <script src="controller-icons.js"></script>
     <script src="big-picture.js"></script>
     <script src="editor.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>
