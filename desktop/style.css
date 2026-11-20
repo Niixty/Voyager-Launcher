@@ -456,3 +456,46 @@ pre {
 .bp-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover }
 .big-picture footer { display: flex; justify-content: space-between; align-items: center; gap: 1em; padding-top: 2vh; font-size: clamp(16px,1.35vw,30px) }
 .bp-status { margin: 0 }
+
+
+/* SteamGridDB: navegador interno com miniaturas responsivas */
+.sgdb-dialog {
+  width: min(1060px, 95vw);
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 22px;
+}
+.sgdb-shell { display: grid; gap: 14px; }
+.sgdb-game-picker { max-width: 530px; }
+.sgdb-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.sgdb-item {
+  padding: 7px;
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.sgdb-item:hover, .sgdb-item:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.sgdb-item img {
+  width: 100%;
+  height: 160px;
+  object-fit: contain;
+  background: #12151d;
+  border-radius: 6px;
+}
+.sgdb-item small { text-align: center; color: var(--muted); }
+.sgdb-shell .row { flex-wrap: wrap; }

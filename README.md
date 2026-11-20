@@ -150,3 +150,26 @@ controlam o texto dentro da caixa, sem mover o quadro. A grade **Posição rápi
 na tela** tem nove atalhos para mover a caixa inteira aos cantos, centros das
 bordas ou centro da tela. O movimento manual continua disponível. Layouts
 antigos mantêm o alinhamento original ao topo e à esquerda até serem alterados.
+
+
+### VibePollo e SteamGridDB
+
+Na tela de um jogo, use a aba **VibePollo** para copiar individualmente o nome,
+o caminho da imagem PNG (Grid), a pasta do Voyager e o comando
+`"VoyagerLauncher.exe" --game "ID"`. No painel do VibePollo, em
+**Aplicativos → Adicionar aplicativo**, deixe **Command** vazio e adicione
+o comando do Voyager em **Detached Commands**. O processo do Voyager termina
+quando o loading termina, então executá-lo como comando principal pode
+encerrar a transmissão antes do jogo. A mesma invocação dá suporte a EXE,
+atalhos .lnk e RetroArch conforme o modo cadastrado no jogo.
+
+Em **Configurações → Integração SteamGridDB**, cole a chave de API pessoal
+obtida em https://www.steamgriddb.com/profile/preferences/api. A chave é
+criptografada pelo Windows (DPAPI), salva no perfil local e não aparece
+no GitHub, nos logs nem nos arquivos de jogos. Em **Imagens**, clique
+**Procurar na base de dados** ao lado de Hero ou Grid. A pesquisa usa o
+nome já salvo para o jogo (sem nome, exige preenchimento), mostra possíveis
+correspondências, exibe uma galeria paginada e permite escolher e aplicar
+a imagem dentro do aplicativo. O Cartridge permanece exclusivamente manual.
+Há limites de tamanho para downloads e a origem da imagem precisa ser
+um domínio HTTPS do SteamGridDB.

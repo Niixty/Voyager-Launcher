@@ -220,7 +220,7 @@ function detail(g, section = "Resumo") {
   }
   const tabs = row();
   tabs.classList.add("tabs");
-  for (const name of ["Resumo", "Imagens", "Editor de loading", "Sunshine"]) {
+  for (const name of ["Resumo", "Imagens", "Editor de loading", "VibePollo"]) {
     const b = btn(name, () => {
       if (leave()) detail(g, name);
     });
@@ -285,27 +285,46 @@ function detail(g, section = "Resumo") {
           }
         }),
       );
+      if (kind !== "cartridge") {
+        holder.append(btn("Procurar na base de dados", () => steamGridBrowser(g, kind)));
+      } else {
+        holder.append(el("small", "Cartridge: seleção manual por enquanto."));
+      }
       area.append(holder);
     }
     return;
   }
-  if (section === "Sunshine") {
+  if (section === "VibePollo") {
     const p = el("section", null, "panel");
     main.append(p);
     p.append(
-      el("h2", "Comando do aplicativo"),
-      el("p", "Cole este comando no campo Command do aplicativo no Sunshine."),
+      el("h2", "Adicionar aplicativo no VibePollo"),
+      el("p", "Use este perfil no painel do VibePollo → Aplicativos → Adicionar aplicativo. Serve para jogos EXE, atalhos .lnk e RetroArch: o Voyager escolhe a execução configurada."),
     );
     safe(async () => {
       const cmd = await api.Command(g.ID);
-      const box = inp(cmd);
-      box.readOnly = true;
+      const cover = await api.CoverPath(g.ID);
+      const workingDir = cmd.match(/^"([^"]+)"/)?.[1]?.replace(/[\\/][^\\/]+$/, "") || "";
+      const values = [
+        ["Application Name / Nome", g.Config.title || "", "Nome exibido no Moonlight"],
+        ["Image / Imagem (PNG)", cover || "", "Use a capa Grid do jogo. Se estiver vazia, selecione uma Grid primeiro."],
+        ["Command / Comando principal", "", "Deixe vazio: a tela de loading termina antes do jogo."],
+        ["Detached Commands / Comandos em segundo plano", cmd, "Adicione como um comando detached para não interromper o streaming ao fechar o loading."],
+        ["Working Directory / Pasta de trabalho", workingDir, "Pasta do Voyager Launcher; pode deixar em branco se o VibePollo reconhecer o caminho do executável."],
+      ];
+      for (const [title, value, explanation] of values) {
+        const box = inp(value);
+        box.readOnly = true;
+        p.append(field(title, box), el("small", explanation),
+          btn("Copiar " + title.split(" / ")[0], () => window.runtime.ClipboardSetText(value)));
+      }
       p.append(
-        field("Command", box),
-        btn("Copiar comando", () => window.runtime.ClipboardSetText(cmd)),
-        btn("Copiar caminho da capa", async () =>
-          window.runtime.ClipboardSetText(await api.CoverPath(g.ID)),
-        ),
+        el("h3", "Outras opções do VibePollo"),
+        el("p", "Continue streaming if the application exits quickly: não é necessário usando Detached Commands. Continue streaming until all app processes exit: deixe desmarcado inicialmente. Run as Admin, Display/Resolution, Global Prep e demais overrides: mantenha seus valores atuais, salvo necessidade específica."),
+        btn("Copiar instruções completas", () => window.runtime.ClipboardSetText(
+          values.map(([key,value]) => key + ": " + (value || "(vazio)")).join("\n")
+        )),
+        btn("Abrir painel local do VibePollo", () => window.runtime.BrowserOpenURL("https://127.0.0.1:47990")),
       );
     });
     return;
@@ -350,7 +369,7 @@ function form(g) {
   id.required = true;
   id.pattern = "[A-Za-z0-9_-]{1,70}";
   id.disabled = !!g;
-  fields.append(field("ID usado pelo Sunshine", id));
+  fields.append(field("ID do jogo no Voyager (usado pelo VibePollo)", id));
   function control(k, title, host, kind) {
     const i = k === "description" ? el("textarea") : inp();
     i.value = c[k] || "";
@@ -515,6 +534,44 @@ async function prefs() {
       "primary",
     ),
   );
+  const sgdb = el("section", null, "panel");
+  main.append(sgdb);
+  sgdb.append(
+    el("h2", "Integração SteamGridDB"),
+    el("p", "Gere uma chave gratuita em steamgriddb.com/profile/preferences/api. A chave é protegida no Windows e nunca é incluída nos arquivos do jogo ou no GitHub."),
+  );
+  const apiLink = el("a", "Obter minha chave da API");
+  apiLink.href = "https://www.steamgriddb.com/profile/preferences/api";
+  apiLink.target = "_blank";
+  apiLink.rel = "noopener noreferrer";
+  sgdb.append(apiLink);
+  const keyField = inp("", "password");
+  keyField.autocomplete = "off";
+  keyField.placeholder = "Cole sua chave da API aqui";
+  const keyStatus = el("p", "Verificando chave…");
+  sgdb.append(field("Chave SteamGridDB (não será exibida novamente)", keyField), keyStatus);
+  safe(async () => {
+    keyStatus.textContent = (await api.SteamGridKeyConfigured())
+      ? "Chave configurada neste Windows."
+      : "Chave ainda não configurada.";
+  });
+  sgdb.append(row(
+    btn("Salvar chave", async () => {
+      if (!keyField.value.trim()) throw Error("Informe a chave antes de salvar.");
+      await api.SaveSteamGridKey(keyField.value.trim());
+      keyField.value = "";
+      keyStatus.textContent = "Chave configurada neste Windows.";
+      note("Chave SteamGridDB salva");
+    }, "primary"),
+    btn("Remover chave", async () => {
+      if (!confirm("Remover a chave SteamGridDB salva neste computador?")) return;
+      await api.RemoveSteamGridKey();
+      keyField.value = "";
+      keyStatus.textContent = "Chave ainda não configurada.";
+      note("Chave SteamGridDB removida");
+    }),
+  ));
+
   const d = el("section", null, "panel");
   main.append(d);
   d.append(
@@ -547,6 +604,114 @@ async function prefs() {
     }),
   );
 }
+// Browser de artes SteamGridDB (busca pelo nome já salvo no jogo).
+async function steamGridBrowser(g, kind) {
+  const dialog = el("dialog", null, "sgdb-dialog");
+  const shell = el("div", null, "sgdb-shell");
+  dialog.append(shell);
+  dialog.onclose = () => dialog.remove();
+  document.body.append(dialog);
+  dialog.showModal();
+  const token = {cancelled:false};
+  dialog.addEventListener("close", () => { token.cancelled = true; });
+  const title = el("h2", "SteamGridDB · " + (kind === "hero" ? "Heroes" : "Grids"));
+  const info = el("p", "Buscando com o nome salvo do jogo: " + (g.Config.title || "(não definido)"));
+  const status = el("p", "", "muted");
+  const gallery = el("div", null, "sgdb-gallery");
+  const gamesBox = el("div", null, "sgdb-game-picker");
+  const controls = row(btn("Fechar", () => dialog.close()));
+  const more = btn("Carregar mais imagens", () => safe(loadImages));
+  more.hidden = true;
+  controls.append(more);
+  shell.append(title, info, gamesBox, status, gallery, controls);
+  let gameID = 0, currentPage = 0, loading = false;
+  const showError = (error) => {
+    status.textContent = String(error);
+    if (/chave|API|401|403/i.test(String(error))) {
+      const setup = btn("Configurar chave da API", () => {
+        dialog.close();
+        safe(prefs);
+      });
+      gamesBox.append(setup);
+    }
+    if (/nome do jogo/i.test(String(error))) {
+      gamesBox.append(btn("Definir nome do jogo", () => { dialog.close(); form(g); }));
+    }
+  };
+  async function loadImages() {
+    if (loading || !gameID || token.cancelled) return;
+    loading = true;
+    more.disabled = true;
+    status.textContent = "Buscando imagens (página " + (currentPage + 1) + ")…";
+    try {
+      const result = await api.SteamGridImages(gameID, kind, currentPage);
+      if (token.cancelled) return;
+      for (const artwork of result.items || []) {
+        const item = el("button", null, "sgdb-item");
+        item.type = "button";
+        const preview = el("img");
+        preview.src = artwork.thumb || artwork.url;
+        preview.alt = (kind === "hero" ? "Hero" : "Grid") + " " + artwork.width + " × " + artwork.height;
+        preview.loading = "lazy";
+        const meta = el("small", artwork.width + " × " + artwork.height);
+        item.append(preview, meta);
+        item.onclick = () => safe(async () => {
+          if (!confirm("Usar esta imagem como " + (kind === "hero" ? "Hero" : "Grid") + " de " + g.Config.title + "?")) return;
+          status.textContent = "Baixando e aplicando imagem…";
+          item.disabled = true;
+          try {
+            await api.ApplySteamGridImage(g.ID, kind, artwork.url);
+            stamp++;
+            dialog.close();
+            detail(g, "Imagens");
+            note("Imagem SteamGridDB aplicada com sucesso");
+          } finally { item.disabled = false; }
+        });
+        gallery.append(item);
+      }
+      const count = result.items?.length || 0;
+      const limit = result.limit || 50;
+      currentPage++;
+      more.hidden = count === 0 || (result.total > 0 ? currentPage * limit >= result.total : count < limit);
+      status.textContent = gallery.childElementCount
+        ? gallery.childElementCount + " imagens carregadas. Escolha a que preferir."
+        : "Nenhuma imagem encontrada para este jogo.";
+    } catch (e) {
+      if (!token.cancelled) showError(e);
+    } finally {
+      loading = false;
+      more.disabled = false;
+    }
+  }
+  try {
+    if (!(await api.SteamGridKeyConfigured())) {
+      throw Error("Configure sua chave SteamGridDB em Configurações antes de pesquisar.");
+    }
+    const gamesFound = await api.SteamGridGames(g.ID);
+    if (token.cancelled) return;
+    if (!gamesFound?.length) {
+      status.textContent = "Nenhum jogo encontrado na SteamGridDB para este nome.";
+      return;
+    }
+    const chooser = options(gamesFound.map((x) => [String(x.id), x.name]), String(gamesFound[0].id));
+    const normalized = (s) => String(s || "").trim().toLocaleLowerCase();
+    const exact = gamesFound.find((x) => normalized(x.name) === normalized(g.Config.title));
+    if (exact) chooser.value = String(exact.id);
+    chooser.onchange = () => {
+      gameID = Number(chooser.value);
+      currentPage = 0;
+      gallery.replaceChildren();
+      more.hidden = true;
+      safe(loadImages);
+    };
+    gamesBox.append(field("Jogo encontrado na SteamGridDB", chooser));
+    gameID = Number(chooser.value);
+    await loadImages();
+  } catch (e) {
+    if (!token.cancelled) showError(e);
+  }
+}
+
 $("lib").onclick = () => {
   if (leave()) safe(library);
 };
