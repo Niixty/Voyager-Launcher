@@ -60,7 +60,7 @@ func studioOptions(s *Studio, assets fs.FS) *options.App {
 		BackgroundColour: options.NewRGB(18, 20, 25), AssetServer: &assetserver.Options{Assets: assets, Handler: http.HandlerFunc(serveArtwork)}, Bind: []interface{}{s},
 		OnStartup: func(ctx context.Context) {
 			s.ctx = ctx
-			go func() { _, err := checkAndStageUpdate(); logSilentUpdateError(err) }()
+			go func() { _, err := probeUpdateStatus(); logSilentUpdateError(err) }()
 		},
 		OnShutdown: func(context.Context) { logSilentUpdateError(launchPendingUpdate()) }}
 }
@@ -354,7 +354,12 @@ func renderFramePercent(c gameConfig,l ll.Layout,cart,bg *img,accent uint32,pain
 	data, e := os.ReadFile(file)
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(data), e
 }
-func (s *Studio) CheckUpdate() (string, error) { return checkAndStageUpdate() }
+func (s *Studio) CheckUpdate() (string, error) {
+  status,err:=probeUpdateStatus()
+  if err!=nil{return "",err}
+  if status.Available{return status.Latest,nil}
+  return "",nil
+}
 func (s *Studio) Version() string              { return version }
 func (s *Studio) CoverPath(id string) (string, error) {
 	c, e := readConfig(id)

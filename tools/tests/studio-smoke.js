@@ -103,6 +103,16 @@
     await probe.Capture("editor");
     click("Configurações");
     await wait(() => heading("Configurações"), "Configurações");
+    const updatePanel = document.querySelector(".update-panel");
+    if (!updatePanel) throw Error("Central de atualizações não encontrada");
+    const applyUpdate = [...updatePanel.querySelectorAll("button")].find(b => b.textContent === "Aplicar atualização");
+    if (!applyUpdate) throw Error("Botão Aplicar atualização ausente");
+    const updateInfo = await api.UpdateInfo();
+    if (updateInfo.preview && !applyUpdate.hidden)
+      throw Error("Botão Aplicar atualização deve ficar oculto na versão de testes");
+    const actionGap = parseFloat(getComputedStyle(updatePanel.querySelector(".update-actions")).columnGap);
+    if (!Number.isFinite(actionGap) || actionGap < 8)
+      throw Error("Os botões de atualização continuam sem espaçamento");
     click("Salvar preferências");
     await wait(
       () =>

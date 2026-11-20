@@ -24,13 +24,9 @@ func main() {
 	// Ela nao abre janela, nao bloqueia o Sunshine e nao altera a pasta Games.
 	args := os.Args[1:]
 	if len(args) == 1 && strings.EqualFold(args[0], "--check-updates") {
-		if _, err := checkAndStageUpdate(); err != nil {
-			logSilentUpdateError(err)
-			return
-		}
-		if err := launchPendingUpdate(); err != nil {
-			logSilentUpdateError(err)
-		}
+		if _, err := probeUpdateStatus(); err != nil {
+            logSilentUpdateError(err)
+        }
 		return
 	}
 	// Awareness context PER_MONITOR_AWARE_V2; falls back when not supported.

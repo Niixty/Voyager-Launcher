@@ -46,6 +46,13 @@ var updateState struct {
 	sync.Mutex
 	pending *pendingUpdate
 	status  string
+    approved bool
+    available string
+    checking bool
+    downloading bool
+    progress int
+    stage string
+    lastError string
 }
 
 func newerVersion(remote, local string) bool {
@@ -102,6 +109,10 @@ func checkAndStageUpdate() (string, error) {
 	if strings.HasSuffix(version, "-preview") {
 		return "", nil
 	}
+    updateState.Lock()
+    updateState.progress=0
+    updateState.stage="Preparando download"
+    updateState.Unlock()
 	unlock, err := updatefiles.Lock(rootDir)
 	if err != nil {
 		return "", err
@@ -170,7 +181,12 @@ func checkAndStageUpdate() (string, error) {
 		tmp := file.Name()
 		defer os.Remove(tmp)
 		hash := sha256.New()
-		bytes, e := io.CopyN(io.MultiWriter(file, hash), res.Body, asset.Size+1)
+        updateState.Lock()
+        updateState.stage="Baixando atualização"
+        updateState.progress=0
+        updateState.Unlock()
+        meter:=&updateDownloadMeter{source:res.Body,total:asset.Size}
+		bytes, e := io.CopyN(io.MultiWriter(file, hash), meter, asset.Size+1)
 		closeErr := file.Close()
 		res.Body.Close()
 		if e != nil && e != io.EOF {
@@ -181,6 +197,10 @@ func checkAndStageUpdate() (string, error) {
 			_ = os.Remove(tmp)
 			return "", errors.New("download incompleto")
 		}
+        updateState.Lock()
+        updateState.stage="Validando integridade SHA-256"
+        updateState.progress=96
+        updateState.Unlock()
 		if !strings.EqualFold(hex.EncodeToString(hash.Sum(nil)), strings.TrimPrefix(asset.Digest, "sha256:")) {
 			_ = os.Remove(tmp)
 			return "", errors.New("SHA-256 inválido")
@@ -190,41 +210,70 @@ func checkAndStageUpdate() (string, error) {
 		if err = os.WriteFile(dest+".sha256", []byte(strings.TrimPrefix(asset.Digest, "sha256:")), 0600); err != nil {
 			return "", err
 		}
+		// A previous downloaded stage may exist. Replace only after the new
+        // download and its digest were completely verified.
+        if err=os.Remove(dest);err!=nil && !errors.Is(err,os.ErrNotExist) {return "",err}
 		if err = os.Rename(tmp, dest); err != nil {
 			_ = os.Remove(tmp)
 			return "", err
 		}
+        updateState.Lock()
+        updateState.stage="Preparando atualizador de reinicialização"
+        updateState.progress=98
+        updateState.Unlock()
+        if err=downloadUpdatedHelper(ctx,release);err!=nil {
+            return "",fmt.Errorf("não foi possível atualizar VoyagerUpdater.exe: %w",err)
+        }
 		updateState.Lock()
 		updateState.pending = &pendingUpdate{Version: release.TagName, File: dest}
+        updateState.available=release.TagName
+        updateState.stage="Download verificado"
+        updateState.progress=100
 		updateState.Unlock()
 		return release.TagName, nil
 	}
 	return "", errors.New("release sem VoyagerLauncher.exe")
 }
 
+// The classic manager also checks only metadata. Installing requires an
+// explicit button click in the modern Settings view.
+
+type updateDownloadMeter struct {
+    source io.Reader
+    total int64
+    received int64
+}
+func (p *updateDownloadMeter) Read(chunk []byte)(int,error){
+    n,e:=p.source.Read(chunk)
+    p.received+=int64(n)
+    if p.total>0 && n>0 {
+        percent:=int(p.received*94/p.total)
+        if percent>94 {percent=94}
+        updateState.Lock()
+        if percent>updateState.progress {updateState.progress=percent}
+        updateState.Unlock()
+    }
+    return n,e
+}
+
 func startUpdateCheck(hwnd uintptr) {
-	go func() {
-		latest, err := checkAndStageUpdate()
-		if latest != "" {
-			updateState.Lock()
-			updateState.status = "Atualização " + latest + " pronta. Será instalada ao fechar o Voyager."
-			updateState.Unlock()
-			call(pPostMessage, hwnd, WM_VOYAGER_UPDATE, 0, 0)
-			return
-		}
-		if err != nil { // Network failures must never block game loading or break offline use.
-			updateState.Lock()
-			updateState.status = "Sem atualização: " + err.Error()
-			updateState.Unlock()
-		}
-	}()
+ go func(){
+    result,err:=probeUpdateStatus()
+    updateState.Lock()
+    if err!=nil {updateState.status="Não foi possível consultar atualizações: "+err.Error()}
+    if err==nil && result.Available {updateState.status="Nova versão "+result.Latest+" disponível nas Configurações"}
+    if err==nil && !result.Available {updateState.status="Voyager atualizado"}
+    updateState.Unlock()
+    call(pPostMessage,hwnd,WM_VOYAGER_UPDATE,0,0)
+ }()
 }
 
 func launchPendingUpdate() error {
 	updateState.Lock()
 	u := updateState.pending
+    approved:=updateState.approved
 	updateState.Unlock()
-	if u == nil {
+	if u == nil || !approved {
 		return nil
 	}
 	helper := filepath.Join(rootDir, "VoyagerUpdater.exe")
@@ -235,7 +284,7 @@ func launchPendingUpdate() error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(helper, "--apply", exe, u.File, strconv.Itoa(os.Getpid()))
+	cmd := exec.Command(helper, "--apply", exe, u.File, strconv.Itoa(os.Getpid()), "--restart")
 	cmd.Dir = rootDir
 	return cmd.Start()
 }

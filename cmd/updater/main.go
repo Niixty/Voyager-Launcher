@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+    "os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,7 +18,7 @@ import (
 // The updater is a separate native Windows GUI executable because Windows
 // keeps the running launcher's image mapped until its process exits.
 func main() {
-	if len(os.Args) != 5 || os.Args[1] != "--apply" {
+	if (len(os.Args) != 5 && len(os.Args) != 6) || os.Args[1] != "--apply" {
 		return
 	}
 	target, err := filepath.Abs(os.Args[2])
@@ -31,7 +32,9 @@ func main() {
 	if !strings.EqualFold(filepath.Base(target), "VoyagerLauncher.exe") || !strings.EqualFold(filepath.Base(staged), "VoyagerLauncher.next.exe") || !strings.EqualFold(filepath.Dir(target), filepath.Dir(staged)) {
 		return
 	}
-	pid, err := strconv.Atoi(os.Args[4])
+	restart:=len(os.Args)==6 && os.Args[5]=="--restart"
+    if len(os.Args)==6 && !restart {return}
+    pid, err := strconv.Atoi(os.Args[4])
 	if err != nil || pid <= 0 {
 		return
 	}
@@ -58,8 +61,18 @@ func main() {
 	}
 	defer unlock()
 	if err = apply(target, staged); err != nil {
-		logError(target, err)
-	}
+        logError(target, err)
+        return
+    }
+    if restart {
+        // Restore the manager immediately after its validated replacement.
+        // The updater is a separate process, because Windows locks live EXEs.
+        if _,err=os.Stat(target);err!=nil {logError(target,err);return}
+        cmd:=exec.Command(target)
+        cmd.Dir=filepath.Dir(target)
+        if err=cmd.Start();err!=nil {logError(target,fmt.Errorf("não foi possível reabrir Voyager: %w",err));return}
+        _=cmd.Process.Release()
+    }
 }
 func logError(target string, err error) {
 	_ = os.WriteFile(filepath.Join(filepath.Dir(target), "VoyagerUpdater-error.log"), []byte(fmt.Sprintf("%s: %v\n", time.Now().Format(time.RFC3339), err)), 0644)

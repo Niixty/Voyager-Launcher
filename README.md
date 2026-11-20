@@ -195,3 +195,24 @@ o efeito sem abrir o jogo, incluindo a animação e o brilho final.
 **Testar loading (10 s)** percorre o progresso inteiro sem executar nada.
 Layouts anteriores continuam funcionando, mas o elemento antigo da barra
 separada agora é ignorado e não aparece mais no editor.
+
+
+### Central de atualizações (Settings)
+
+A área **Atualizações e diagnóstico** exibe versão instalada, última
+versão disponível, estado da conexão e botões separados por espaçamento.
+A aplicação consulta apenas os metadados da última release ao iniciar e
+cada vez que Configurações é aberta. A consulta não baixa nem instala nada.
+
+Quando há uma versão nova, aparece o botão **Aplicar atualização** na cor
+de destaque do tema ativo. Após confirmação, o Voyager baixa o novo EXE,
+mostra a porcentagem do download, valida o SHA-256 e atualiza também o
+auxiliar `VoyagerUpdater.exe`. Somente então fecha, substitui o executável
+com backup da versão antiga e **reabre automaticamente**. Se o download
+ou a verificação falhar, o programa permanece aberto e exibe o erro;
+o botão não aparece quando já está atualizado.
+
+O histórico de instalações e o diagnóstico da biblioteca continuam
+disponíveis na mesma seção, mas em uma área expansível separada.
+A tarefa automática `--check-updates` só verifica se existe uma release,
+sem instalar silenciosamente ao fechar o aplicativo.

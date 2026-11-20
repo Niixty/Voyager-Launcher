@@ -572,37 +572,148 @@ async function prefs() {
     }),
   ));
 
-  const d = el("section", null, "panel");
+  // Version verification never downloads or installs anything. Only the
+  // explicitly confirmed "Aplicar atualização" path stages and restarts.
+  const d = el("section", null, "panel update-panel");
   main.append(d);
-  d.append(
-    el("h2", "Atualizações e diagnóstico"),
-    el("p", $("version").textContent),
-    btn("Verificar atualizações", async () => {
-      note("Consultando GitHub…");
-      if ((await api.Version()).endsWith("-preview")) {
-        note("Versão de teste. Atualizações automáticas estão pausadas.");
-        return;
-      }
-      const v = await api.CheckUpdate();
-      note(
-        v
-          ? "Versão " + v + " pronta para instalar ao fechar."
-          : "Você está na versão atual.",
-      );
-    }),
-    btn("Histórico", async () => {
-      const log = await api.UpdateHistory();
-      d.querySelector("pre")?.remove();
-      d.append(el("pre", log));
-    }),
-    btn("Verificar biblioteca", async () => {
-      const lines = await api.Diagnose();
-      d.querySelector("pre")?.remove();
-      d.append(
-        el("pre", lines.join("\n") || "Arquivos de execução encontrados."),
-      );
-    }),
+  const head = el("div", null, "update-heading");
+  head.append(
+    add(el("div"), el("h2", "Atualizações e diagnóstico"),
+      el("p", "Verifique novas versões, instale com segurança e consulte o histórico do aplicativo.")),
   );
+  const status = el("div", "Consultando versão instalada…", "update-status");
+  head.append(status);
+  const versions = el("div", null, "update-versions");
+  const installed = add(el("div", null, "update-version"),
+    el("small", "VERSÃO INSTALADA"), el("strong", "—"));
+  const latest = add(el("div", null, "update-version"),
+    el("small", "VERSÃO MAIS RECENTE"), el("strong", "Verificando…"));
+  versions.append(installed, latest);
+  const actions = el("div", null, "update-actions");
+  const checkButton = btn("Verificar atualizações", checkForUpdates);
+  const applyButton = btn("Aplicar atualização", applyUpdate, "primary update-apply");
+  applyButton.hidden = true;
+  const historyButton = btn("Histórico", async () => {
+    const text = await api.UpdateHistory();
+    showUpdateDetails("Histórico de atualizações", text);
+  });
+  const diagnosticsButton = btn("Verificar biblioteca", async () => {
+    const lines = await api.Diagnose();
+    showUpdateDetails("Diagnóstico da biblioteca", lines.join("\n") || "Nenhum problema encontrado.");
+  });
+  actions.append(checkButton, applyButton, historyButton, diagnosticsButton);
+  const details = el("div", null, "update-details");
+  details.hidden = true;
+  d.append(head, versions, actions, details);
+
+  function showUpdateDetails(title, contents) {
+    details.replaceChildren(el("h3", title), el("pre", contents));
+    details.hidden = false;
+  }
+  function renderUpdateInfo(info) {
+    if (page !== t || !info) return;
+    installed.querySelector("strong").textContent = info.current || "—";
+    latest.querySelector("strong").textContent =
+      info.latest || (info.preview ? "Prévia de desenvolvimento" : "Nenhuma versão nova");
+    const available = Boolean(info.available && !info.preview);
+    applyButton.hidden = !available;
+    applyButton.disabled = Boolean(info.downloading);
+    status.classList.remove("available", "checking", "failed", "current");
+    if (info.preview) {
+      status.textContent = "Versão de desenvolvimento — verificação automática desativada";
+      status.classList.add("current");
+    } else if (info.downloading) {
+      status.textContent = "Baixando atualização — " + (info.progress || 0) + "%";
+      status.classList.add("checking");
+    } else if (info.checking) {
+      status.textContent = "Procurando versões novas no GitHub…";
+      status.classList.add("checking");
+    } else if (info.error) {
+      status.textContent = "Não foi possível verificar: " + info.error;
+      status.classList.add("failed");
+    } else if (available) {
+      status.textContent = "Nova versão disponível" + (info.ready ? " — download já preparado" : "");
+      status.classList.add("available");
+    } else {
+      status.textContent = "Você está usando a versão mais recente";
+      status.classList.add("current");
+    }
+  }
+  async function checkForUpdates() {
+    checkButton.disabled = true;
+    status.textContent = "Verificando novas versões no GitHub…";
+    status.classList.add("checking");
+    try {
+      renderUpdateInfo(await api.CheckUpdateStatus());
+    } catch (error) {
+      renderUpdateInfo(await api.UpdateInfo());
+      status.textContent = "Não foi possível verificar: " + String(error);
+      status.classList.add("failed");
+    } finally {
+      if (page === t) checkButton.disabled = false;
+    }
+  }
+  async function applyUpdate() {
+    const info = await api.UpdateInfo();
+    if (!info.available || info.preview) {
+      renderUpdateInfo(info);
+      return;
+    }
+    if (dirty && !confirm("Existem preferências não salvas. Descartá-las e instalar a atualização?")) return;
+    if (!confirm("Instalar a versão " + info.latest + "? O Voyager será fechado e reaberto automaticamente após a instalação.")) return;
+
+    const dialog = el("dialog", null, "update-dialog");
+    const body = el("div", null, "update-dialog-content");
+    const heading = el("h2", "Atualizando Voyager");
+    const message = el("p", "Preparando download seguro da versão " + info.latest + "…");
+    const percent = el("strong", "0%", "update-percentage");
+    const progress = el("progress");
+    progress.max = 100;
+    progress.value = 0;
+    const help = el("small", "O arquivo será verificado por SHA-256 antes da instalação.");
+    body.append(heading, message, percent, progress, help);
+    dialog.append(body);
+    document.body.append(dialog);
+    dialog.showModal();
+    // Prevent the progress dialog from being closed midway through an EXE download.
+    dialog.addEventListener("cancel", (event) => event.preventDefault());
+    let finished = false;
+    const paintProgress = (state) => {
+      if (!dialog.open || !state) return;
+      const current = Math.max(0, Math.min(100, Number(state.progress) || 0));
+      progress.value = current;
+      percent.textContent = current + "%";
+      message.textContent = state.stage || "Preparando atualização…";
+    };
+    const interval = setInterval(() => {
+      if (!finished) api.UpdateInfo().then(paintProgress).catch(() => {});
+    }, 180);
+    try {
+      await api.PrepareUpdate();
+      finished = true;
+      clearInterval(interval);
+      paintProgress(await api.UpdateInfo());
+      message.textContent = "Download concluído. Fechando para instalar e reabrir o Voyager…";
+      help.textContent = "Se o Windows impedir a substituição, a versão anterior será preservada.";
+      await api.InstallUpdateNow();
+      // OnShutdown launches VoyagerUpdater.exe, which waits for the manager
+      // process to exit, replaces the validated EXE and starts it again.
+      window.runtime.Quit();
+    } catch (error) {
+      finished = true;
+      clearInterval(interval);
+      heading.textContent = "Atualização não concluída";
+      message.textContent = String(error);
+      help.textContent = "O Voyager atual continuará funcionando normalmente.";
+      body.append(btn("Fechar", () => dialog.close(), "primary"));
+      dialog.addEventListener("close", () => dialog.remove(), { once: true });
+      renderUpdateInfo(await api.UpdateInfo());
+    }
+  }
+
+  // Opening Settings performs another independent check. The backend also
+  // probes once at launch, but never stages an EXE without user consent.
+  safe(checkForUpdates);
 }
 // Browser de artes SteamGridDB (busca pelo nome já salvo no jogo).
 async function steamGridBrowser(g, kind) {
