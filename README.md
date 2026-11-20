@@ -173,3 +173,25 @@ correspondências, exibe uma galeria paginada e permite escolher e aplicar
 a imagem dentro do aplicativo. O Cartridge permanece exclusivamente manual.
 Há limites de tamanho para downloads e a origem da imagem precisa ser
 um domínio HTTPS do SteamGridDB.
+
+
+### Loading integrado à imagem do Cartucho / Grid
+
+A barra horizontal separada não é mais renderizada. O progresso acontece
+**dentro dos pixels visíveis** da imagem: começa discretamente escurecido,
+clareia e recebe uma tonalidade suave da cor extraída do Hero do jogo, da
+esquerda para a direita. O canal alfa original não é modificado: as áreas
+transparentes do PNG, inclusive os buracos internos, nunca recebem a cor.
+Sem Cartridge, a capa Grid assume exatamente o mesmo efeito.
+
+A partir de 95%, o cartucho ou Grid desacelera até ficar centralizado e
+recebe um halo suave gerado a partir do seu contorno real. Ao concluir 100%,
+faz um salto e uma pequena ampliação, permanecendo visível por instantes
+antes do fade-out da tela. O desenho é feito com sprites em cache e
+recriado apenas quando a porcentagem muda.
+
+No editor de loading, o controle **Progresso: 0%–100%** permite inspecionar
+o efeito sem abrir o jogo, incluindo a animação e o brilho final.
+**Testar loading (10 s)** percorre o progresso inteiro sem executar nada.
+Layouts anteriores continuam funcionando, mas o elemento antigo da barra
+separada agora é ignorado e não aparece mais no editor.

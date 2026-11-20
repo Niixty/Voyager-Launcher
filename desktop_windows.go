@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -299,6 +300,9 @@ func (s *Studio) SaveLayout(id, scope string, l ll.Layout) error {
 	return errors.New("destino inválido")
 }
 func (s *Studio) Frame(id string, l ll.Layout) (string, error) {
+    return s.FrameProgress(id,l,50)
+}
+func (s *Studio) FrameProgress(id string,l ll.Layout,percent int) (string,error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, e := readConfig(id)
@@ -322,9 +326,13 @@ func (s *Studio) Frame(id string, l ll.Layout) (string, error) {
 	if cart != nil {
 		defer cart.close()
 	}
-	return renderFrame(c, l.Normalize(), cart, bg, heroaccent.FromFile(hero), true)
+	return renderFramePercent(c, l.Normalize(), cart, bg, heroaccent.FromFile(hero), true,percent)
 }
 func renderFrame(c gameConfig, l ll.Layout, cart, bg *img, accent uint32, paintBackground bool) (string, error) {
+    return renderFramePercent(c,l,cart,bg,accent,paintBackground,50)
+}
+func renderFramePercent(c gameConfig,l ll.Layout,cart,bg *img,accent uint32,paintBackground bool,percent int) (string,error) {
+    if percent<0{percent=0};if percent>100{percent=100}
 	// Prévia Full HD: os antigos 960x540 deixavam os textos embaçados ao ampliar
 	// o editor ou utilizar Windows com escala de tela alta.
 	p, b, e := newBitmapGraphics(1920, 1080)
@@ -332,7 +340,7 @@ func renderFrame(c gameConfig, l ll.Layout, cart, bg *img, accent uint32, paintB
 		return "", e
 	}
 	defer call(pGdipDisposeImage, b)
-	drawOverlayPass(p, c, 0, 0, 1920, 1080, 50, "Preparando a tela do jogo", "", cart, bg, accent, 0, l, false, paintBackground)
+	drawOverlayPass(p, c, 0, 0, 1920, 1080, percent, "Preparando a tela do jogo", "", cart, bg, accent, 0, l, false, paintBackground)
 	p.close()
 	dir, e := os.MkdirTemp("", "voyager-preview-")
 	if e != nil {
@@ -423,9 +431,34 @@ func (s *Studio) PickArt() (map[string]string, error) {
 	return map[string]string{"path": p, "preview": "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)}, nil
 }
 
+// Build the colorized transparent sprite for WebView2's smooth CSS animation.
+func loadingSpritePreview(asset *img,accent uint32,percent int)(string,error){
+    if asset==nil{return "",nil}
+    f:=math.Min(1,1000.0/float64(asset.W))
+    w:=int(math.Max(1,math.Round(float64(asset.W)*f)))
+    h:=int(math.Max(1,math.Round(float64(asset.H)*f)))
+    p,b,e:=newBitmapGraphics(w,h)
+    if e!=nil{return "",e}
+    defer call(pGdipDisposeImage,b)
+    p.clear(0)
+    p.drawLoadingAsset(asset,0,0,w,h,percent,accent,false)
+    p.close()
+    dir,e:=os.MkdirTemp("","voyager-loading-art-")
+    if e!=nil{return "",e}
+    defer os.RemoveAll(dir)
+    file:=filepath.Join(dir,"sprite.png")
+    if e=savePNG(b,file);e!=nil{return "",e}
+    raw,e:=os.ReadFile(file)
+    if e!=nil{return "",e}
+    return "data:image/png;base64,"+base64.StdEncoding.EncodeToString(raw),nil
+}
+
 // Only layout or artwork changes require rendering. WebView2 can then move the
 // transparent cartridge between the two cached native layers at display rate.
 func (s *Studio) AnimationLayers(id string, l ll.Layout) (map[string]string, error) {
+    return s.AnimationLayersProgress(id,l,50)
+}
+func (s *Studio) AnimationLayersProgress(id string,l ll.Layout,percent int) (map[string]string,error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, e := readConfig(id)
@@ -448,11 +481,11 @@ func (s *Studio) AnimationLayers(id string, l ll.Layout) (map[string]string, err
 		if n.ID != ll.Cartridge {
 			continue
 		}
-		base, e := renderFrame(c, ll.Layout{Elements: l.Elements[:i]}, nil, bg, accent, true)
+		base, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[:i]}, nil, bg, accent, true,percent)
 		if e != nil {
 			return nil, e
 		}
-		above, e := renderFrame(c, ll.Layout{Elements: l.Elements[i+1:]}, nil, nil, accent, false)
+		above, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[i+1:]}, nil, nil, accent, false,percent)
 		if e != nil {
 			return nil, e
 		}
@@ -460,7 +493,14 @@ func (s *Studio) AnimationLayers(id string, l ll.Layout) (map[string]string, err
 		if artworkPath(c, id, kind) == "" {
 			kind = "grid"
 		}
-		return map[string]string{"base": base, "above": above, "kind": kind}, nil
+		sprite:=""
+        if artwork:=loadImg(artworkPath(c,id,kind));artwork!=nil {
+            sprite,e=loadingSpritePreview(artwork,accent,percent)
+            artwork.close()
+            if e!=nil{return nil,e}
+        }
+        return map[string]string{"base":base,"above":above,"kind":kind,
+          "sprite":sprite,"accent":fmt.Sprintf("#%06X",accent&0xFFFFFF)},nil
 	}
 	return nil, errors.New("layout sem camada de cartucho")
 }

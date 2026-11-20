@@ -499,3 +499,7 @@ pre {
 }
 .sgdb-item small { text-align: center; color: var(--muted); }
 .sgdb-shell .row { flex-wrap: wrap; }
+
+/* Preview of integrated cartridge loading at 0–100%. */
+.previewProgress { display:grid; gap:3px; min-width:170px; font-size:12px; }
+.previewProgress input[type="range"] { width:100%; accent-color:var(--accent); }

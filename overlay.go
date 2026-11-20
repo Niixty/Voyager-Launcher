@@ -35,6 +35,8 @@ type overlayState struct {
 	cfg                                gameConfig
 	id                                 string
 	preview, testLoading               bool
+	lockAt, completedAt                time.Time
+	lockOffset                         float64
 	frameStop                          chan struct{}
 	framePending                       atomic.Bool
 	windows                            []uintptr
@@ -152,21 +154,10 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
         if !n.Visible && !(failed && n.ID==ll.Phase){continue}
         xx,yy,ww,hh:=X(n.X),Y(n.Y),D(n.W),D(n.H)
         if n.ID==ll.Cartridge {
-            if cartridge!=nil {p.imageContain(cartridge,xx,Y(n.Y+bounceY),ww,hh)}
+            if cartridge!=nil {p.drawLoadingAsset(cartridge,xx,Y(n.Y+bounceY),ww,hh,percent,heroColor,failed)}
             continue
         }
-        if n.ID==ll.Progress {
-            height:=hh
-            if height<2 {height=2}
-            p.fill(xx,yy,ww,height,palette(overlayTheme.Color("progressTrack")))
-            progressColor:=palette(heroColor)
-            if failed{progressColor=palette(overlayTheme.Color("progressError"))}
-            clamped:=percent
-            if clamped<0{clamped=0}
-            if clamped>100{clamped=100}
-            if clamped>0{p.fill(xx,yy,int(float64(ww)*float64(clamped)/100),height,progressColor)}
-            continue
-        }
+        if n.ID==ll.Progress {continue} // The cartridge or Grid is the loading bar.
         var value string
         var themeColor uint32
         bold:=false
@@ -387,6 +378,30 @@ func (o *overlayState) cartridgeOffset() float64 {
 	return 11 * math.Sin(time.Since(o.started).Seconds() * (2 * math.Pi / 2.9))
 }
 
+// The floating icon settles smoothly at 95% and celebrates 100% with a short hop.
+func (o *overlayState) loadingMotion(now time.Time) (float64,float64) {
+ if o==nil{return 0,1}
+ if o.percent<95 {
+  if !appPrefs.AnimateCartridge{return 0,1}
+  return o.cartridgeOffset(),1
+ }
+ if o.lockAt.IsZero() {
+  o.lockAt=now
+  o.lockOffset=o.cartridgeOffset()
+ }
+ t:=math.Min(1,math.Max(0,now.Sub(o.lockAt).Seconds()/.24))
+ eased:=t*t*(3-2*t)
+ offset:=o.lockOffset*(1-eased)
+ scale:=1.035
+ if !o.completedAt.IsZero() {
+  u:=math.Min(1,math.Max(0,now.Sub(o.completedAt).Seconds()/.44))
+  jump:=math.Sin(math.Pi*u)
+  offset-=9*jump
+  scale=1.035+0.075*jump
+ }
+ return offset,scale
+}
+
 func (o *overlayState) stop() {
 	if len(o.windows) == 0 {
 		return
@@ -489,9 +504,9 @@ func (o *overlayState) run() error {
 		return winError("não foi possível criar tela cheia")
 	}
 	o.started = time.Now()
-	o.percent = 50
+	o.percent = 0
 	if o.testLoading {
-		o.phase = "Teste do loading (sem iniciar o jogo)"
+		o.phase = "Simulando loading (sem iniciar o jogo)"
 	} else {
 		o.percent = 5
 		o.phase = "Verificando arquivos do jogo"
@@ -772,11 +787,16 @@ func (o *overlayState) findGameWindow() uintptr {
 func (o *overlayState) tick() {
 	now := time.Now()
 	if o.testLoading {
-		if now.Sub(o.started) >= loadingTestDuration {
-			o.stop()
-		}
-		return
-	}
+        elapsed:=now.Sub(o.started)
+        if elapsed>=loadingTestDuration {o.stop();return}
+        progress:=int(math.Min(100,elapsed.Seconds()/9.1*100))
+        if progress!=o.percent {
+            o.percent=progress
+            if progress==100 && o.completedAt.IsZero(){o.completedAt=now}
+            o.invalidateAll()
+        }
+        return
+    }
 	if o.fail != "" {
 		if now.Sub(o.timeFailed) > 6*time.Second {
 			o.stop()
@@ -785,11 +805,15 @@ func (o *overlayState) tick() {
 	}
 	if !o.fadeAt.IsZero() {
 		age := now.Sub(o.fadeAt)
-		level := 255 - int(math.Min(1, age.Seconds()/.20)*255)
+		// Show the full glow and final hop before fading the overlay.
+        level:=255
+        if age>550*time.Millisecond {
+           level=255-int(math.Min(1,(age.Seconds()-.55)/.22)*255)
+        }
 		for _, hw := range o.windows {
 			call(pSetLayeredWindowAttributes, hw, 0, uintptr(level), LWA_ALPHA)
 		}
-		if age >= 200*time.Millisecond {
+		if age >= 800*time.Millisecond {
 			o.stop()
 		}
 		return
@@ -832,10 +856,11 @@ func (o *overlayState) tick() {
 		if hold < time.Second { hold = time.Second }
 		if age >= hold {
 			o.percent = 100
-			o.phase = "Jogo pronto"
-			o.invalidateAll()
-			call(pSetForegroundWindow, candidate)
-			o.fadeAt = now
+            o.phase="Jogo pronto"
+            o.completedAt=now
+            o.invalidateAll()
+            call(pSetForegroundWindow,candidate)
+            o.fadeAt=now
 		} else {
 			v := 70 + int(age.Seconds()/hold.Seconds()*25)
 			if v > 95 {

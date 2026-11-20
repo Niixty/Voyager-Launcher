@@ -3,10 +3,13 @@
 package main
 
 import (
+    "image"
     "math"
     "syscall"
+    "time"
     "unsafe"
 
+    "voyager/native/internal/loadingprogress"
     ll "voyager/native/internal/loadinglayout"
 )
 
@@ -19,7 +22,10 @@ type overlayBackbuffer struct {
     valid bool
     cachedPercent int
     cachedPhase, cachedDetail string
-    sprite, foreground *img
+    sprite, foreground, halo *img
+    source *image.NRGBA
+    glowRadius, spritePercent int
+    spriteFailed bool
     alphaFrames [4]overlayAlphaFrame
     alphaReady bool
     x, w, h int
@@ -49,6 +55,7 @@ func (b *overlayBackbuffer) release() {
     if b==nil{return}
     b.sprite.close()
     b.foreground.close()
+    b.halo.close()
     for i:=range b.alphaFrames {b.alphaFrames[i].release()}
     if b.staticDC!=0 {
         call(pSelectObject,b.staticDC,b.staticPrevious)
@@ -153,18 +160,45 @@ func (b *overlayBackbuffer) prepareSprite(o *overlayState) {
     b.h=int(math.Max(1,float64(o.cartridge.H)*f))
     b.x=int(math.Round((float64(b.width)-ll.VirtualWidth*s)/2+n.X*s))+(w-b.w)/2
     b.baseY=(float64(b.height)-ll.VirtualHeight*s)/2+n.Y*s+float64((h-b.h)/2)
-    b.motion=rect{int32(b.x-2),int32(math.Floor(b.baseY-11*s))-2,int32(b.x+b.w+2),int32(math.Ceil(b.baseY+11*s))+int32(b.h)+2}
-    p,handle,err:=newBitmapGraphics(b.w,b.h)
+    radius:=int(math.Max(10,math.Min(34,float64(b.w)*0.07)))
+    b.glowRadius=radius
+    marginX:=int(math.Max(50,float64(b.w)*0.20))
+    marginY:=int(math.Max(50,float64(b.h)*0.20+11*s))
+    b.motion=rect{int32(b.x-marginX),int32(math.Floor(b.baseY))-int32(marginY),int32(b.x+b.w+marginX),int32(math.Ceil(b.baseY))+int32(b.h)+int32(marginY)}
+    source,err:=loadingPixels(o.cartridge,b.w,b.h)
+    if err!=nil {
+        // Keep the regular image as a safe fallback if pixel extraction fails.
+        p,handle,e:=newBitmapGraphics(b.w,b.h)
+        if e!=nil{return}
+        p.clear(0)
+        p.imageCover(o.cartridge,0,0,b.w,b.h)
+        p.close()
+        b.sprite=&img{handle:handle,W:b.w,H:b.h}
+        return
+    }
+    b.source=source
+    accent:=loadingAccent(o.accent,false)
+    if glow,e:=loadingBitmap(loadingprogress.Halo(source,radius,accent));e==nil {b.halo=glow}
+    b.spritePercent=-1
+    b.updateSprite(o)
+}
+func (b *overlayBackbuffer) updateSprite(o *overlayState) {
+    if b.source==nil{return}
+    failed:=o.fail!=""
+    if b.sprite!=nil && b.spritePercent==o.percent && b.spriteFailed==failed{return}
+    tinted,err:=loadingBitmap(loadingprogress.Blend(b.source,o.percent,loadingAccent(o.accent,failed)))
     if err!=nil{return}
-    p.clear(0)
-    p.imageCover(o.cartridge,0,0,b.w,b.h)
-    p.close()
-    b.sprite=&img{handle,b.w,b.h}
+    for i:=range b.alphaFrames {b.alphaFrames[i].release()}
+    b.alphaReady=false
+    b.sprite.close()
+    b.sprite=tinted
+    b.spritePercent=o.percent
+    b.spriteFailed=failed
     for i:=range b.alphaFrames {
-        frame,ok:=rasterizedAlphaFrame(o.cartridge,b.w,b.h,float64(i)/float64(len(b.alphaFrames)))
+        frame,ok:=rasterizedAlphaFrame(tinted,b.w,b.h,float64(i)/float64(len(b.alphaFrames)))
         if !ok {
             for j:=range b.alphaFrames {b.alphaFrames[j].release()}
-            return // Keep the GDI+ fallback when the fast path cannot be initialized.
+            return // GDI+ fallback draws the correct colored sprite.
         }
         b.alphaFrames[i]=frame
     }
@@ -240,6 +274,7 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
         }
         drawOverlay(p,o.cfg,0,0,width,height,o.percent,o.phase,o.detail,nil,o.background,o.accent,0,below,failed)
         p.close()
+        b.updateSprite(o)
         b.cachedPercent=o.percent
         b.cachedPhase=o.phase
         b.cachedDetail=o.detail
@@ -250,15 +285,29 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
     x,y,w,h:=uintptr(damage.Left),uintptr(damage.Top),uintptr(damage.w()),uintptr(damage.h())
     call(pBitBlt,b.dc,x,y,w,h,b.staticDC,x,y,SRCCOPY)
     if b.sprite!=nil {
-        position:=b.baseY+o.cartridgeOffset()*b.scale
+        offset,scale:=o.loadingMotion(time.Now())
+        position:=b.baseY+offset*b.scale
+        drawW:=float64(b.w)*scale
+        drawH:=float64(b.h)*scale
+        drawX:=float64(b.x)-(drawW-float64(b.w))/2
+        drawY:=position-(drawH-float64(b.h))/2
+        bits:=func(v float64)uintptr{return uintptr(math.Float32bits(float32(v)))}
+        if b.halo!=nil && o.percent>=95 {
+            p:=paintFromHDC(b.dc)
+            radius:=float64(b.glowRadius)*scale
+            haloX,haloY:=drawX-radius,drawY-radius
+            haloW,haloH:=drawW+2*radius,drawH+2*radius
+            call(drawImageFloat,p.g,b.halo.handle,bits(haloX),bits(haloY),bits(haloW),bits(haloH))
+            if o.percent==100 {call(drawImageFloat,p.g,b.halo.handle,bits(haloX),bits(haloY),bits(haloW),bits(haloH))}
+            p.close()
+        }
         usedFastPath:=false
-        if b.alphaReady {
+        if b.alphaReady && scale==1 {
             base:=math.Floor(position)
             fraction:=position-base
             phase:=int(fraction*float64(len(b.alphaFrames)))
             if phase>=len(b.alphaFrames){phase=len(b.alphaFrames)-1}
             source:=b.alphaFrames[phase]
-            // AC_SRC_OVER with full source opacity and per-pixel alpha.
             usedFastPath=call(alphaBlend,b.dc,uintptr(b.x),uintptr(int(base)-1),uintptr(b.w),uintptr(b.h+2),
                 source.dc,0,0,uintptr(b.w),uintptr(b.h+2),0x01FF0000)!=0
         }
@@ -266,8 +315,7 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
             p:=paintFromHDC(b.dc)
             if !usedFastPath {
                 call(pGdipSetInterpolationMode,p.g,3)
-                bits:=func(v float64)uintptr{return uintptr(math.Float32bits(float32(v)))}
-                call(drawImageFloat,p.g,b.sprite.handle,bits(float64(b.x)),bits(position),bits(float64(b.w)),bits(float64(b.h)))
+                call(drawImageFloat,p.g,b.sprite.handle,bits(drawX),bits(drawY),bits(drawW),bits(drawH))
             }
             if b.foreground!=nil {
                 call(pGdipDrawImageRectRectI,p.g,b.foreground.handle,x,y,w,h,x,y,w,h,2,0,0,0)

@@ -10,7 +10,7 @@ func TestDefaults(t *testing.T){
   d:=Default()
   if len(d.Elements)!=8 {t.Fatalf("expected 8 nodes, got %d",len(d.Elements))}
   for _,node:=range d.Elements{
-   if !node.Visible || node.W<=0 || node.X+node.W>1600 || node.Y+node.H>900 {t.Fatal(node)}
+   if (node.ID!=Progress && !node.Visible) || node.W<=0 || node.X+node.W>1600 || node.Y+node.H>900 {t.Fatal(node)}
   }
 }
 func TestRoundtripVisibilityAndOrdering(t *testing.T){

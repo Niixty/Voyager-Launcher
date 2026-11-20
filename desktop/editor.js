@@ -9,6 +9,8 @@ async function editor(g) {
     grid = true,
     zoom = 1,
     anim = false,
+    previewPercent = 50,
+    finalPreviewAt = 0,
     rev = 0,
     busy = false,
     drag = null;
@@ -21,7 +23,7 @@ async function editor(g) {
       description: "Descrição",
       heading: "Mensagem",
       percentage: "Porcentagem",
-      progress: "Barra",
+      progress: "Barra antiga (desativada)",
       phase: "Etapa",
     };
   const controls = row(),
@@ -61,6 +63,18 @@ async function editor(g) {
     zoom = Number(zoomer.value);
     stage.style.width = zoom * 100 + "%";
   };
+  const scrub = inp(50, "range");
+  scrub.min = 0;
+  scrub.max = 100;
+  scrub.step = 5;
+  const scrubLabel = el("span", "Progresso: 50%");
+  scrub.oninput = () => {
+    const previous = previewPercent;
+    previewPercent = Number(scrub.value);
+    scrubLabel.textContent = "Progresso: " + previewPercent + "%";
+    finalPreviewAt = previewPercent === 100 && previous !== 100 ? performance.now() : (previewPercent !== 100 ? 0 : finalPreviewAt);
+    requestFrame();
+  };
   controls.append(
     check("Grade", grid, (v) => {
       grid = v;
@@ -72,6 +86,7 @@ async function editor(g) {
       refresh();
     }),
     zoomer,
+    add(el("label", null, "previewProgress"), scrubLabel, scrub),
     btn("Desfazer", () => history(undo, redo)),
     btn("Refazer", () => history(redo, undo)),
   );
@@ -105,8 +120,12 @@ async function editor(g) {
     if (anim && parts) {
       const n = doc.elements.find((x) => x.id === "cartridge");
       if (n.visible) {
-        floating = image(g.ID, parts.kind);
+        floating = el("img");
+        floating.src = parts.sprite || image(g.ID, parts.kind).src;
         floating.className = "floating";
+        floating.style.filter = previewPercent >= 95
+          ? "drop-shadow(0 0 16px " + (parts.accent || "#afc9fa") + ")"
+          : "none";
         position(floating, n);
         stage.append(floating);
       }
@@ -131,7 +150,7 @@ async function editor(g) {
       stage.append(lines);
     }
     for (const n of doc.elements) {
-      if (!n.visible) continue;
+      if (!n.visible || n.id === "progress") continue;
       const box = el("div", null, "node" + (n.id === sel ? " selected" : ""));
       box.title = names[n.id];
       box.dataset.id = n.id;
@@ -216,7 +235,7 @@ async function editor(g) {
   function properties() {
     props.replaceChildren();
     layer.replaceChildren();
-    for (const n of [...doc.elements].reverse()) {
+    for (const n of [...doc.elements].reverse().filter((x) => x.id !== "progress")) {
       const o = el("option", names[n.id] + (n.visible ? "" : " (oculto)"));
       o.value = n.id;
       layer.append(o);
@@ -373,8 +392,8 @@ async function editor(g) {
     busy = true;
     const seq = rev;
     try {
-      const layers = anim ? await api.AnimationLayers(g.ID, doc) : null;
-      const frame = layers ? layers.base : await api.Frame(g.ID, doc);
+      const layers = anim ? await api.AnimationLayersProgress(g.ID, doc, previewPercent) : null;
+      const frame = layers ? layers.base : await api.FrameProgress(g.ID, doc, previewPercent);
       if (page === serial && seq === rev) {
         parts = layers;
         stage.style.backgroundImage = "url(" + frame + ")";
@@ -415,9 +434,15 @@ async function editor(g) {
     raf = 0;
     if (page !== serial || !anim) return;
     if (floating) {
-      const offset =
-        (11 * Math.sin((time / 2900) * 2 * Math.PI) * stage.clientHeight) / 900;
-      floating.style.transform = "translateY(" + offset + "px)";
+      const finishing = previewPercent >= 95;
+      const elapsed = Math.max(0, time - finalPreviewAt);
+      const jump = previewPercent === 100 && finalPreviewAt
+        ? Math.sin(Math.PI * Math.min(1, elapsed / 440))
+        : 0;
+      const offset = finishing ? -8 * jump
+        : (11 * Math.sin((time / 2900) * 2 * Math.PI) * stage.clientHeight) / 900;
+      const scale = finishing ? (1.035 + 0.075 * jump) : 1;
+      floating.style.transform = "translateY(" + offset + "px) scale(" + scale + ")";
     }
     raf = requestAnimationFrame(float);
   }
