@@ -136,6 +136,19 @@
     api.Run = async (id, mode) => launches.push([id, mode]);
     click("Big Picture");
     await wait(() => document.querySelectorAll(".bp-card").length === 2, "Capas Big Picture");
+    const iconAPI = window.VoyagerGamepadIcons;
+    if (!iconAPI || iconAPI.names.length !== 38)
+      throw Error("Registro completo de ícones genéricos/Xbox/PlayStation ausente");
+    if (iconAPI.buttonName(0, "xbox") !== "xb_a" || iconAPI.buttonName(0, "playstation") !== "ps_x")
+      throw Error("Mapeamento dos botões Xbox/PlayStation está incorreto");
+    await wait(() => document.querySelector(".bp-controls img[src*='xb_a.png']"), "Botão Xbox A");
+    const gamepadIcon = await fetch("/controller-icons/ps_x.png");
+    if (!gamepadIcon.ok || !(await gamepadIcon.blob()).size)
+      throw Error("Imagem PlayStation não foi embutida no EXE");
+    pad.id = "DualSense Wireless Controller";
+    await wait(() => document.querySelector(".bp-controls img[src*='ps_x.png']"), "Ícones PlayStation automáticos");
+    pad.id = "Xbox Wireless Controller";
+    await wait(() => document.querySelector(".bp-controls img[src*='xb_a.png']"), "Retorno aos ícones Xbox");
     buttons[15].pressed = true;
     await wait(() => document.querySelectorAll(".bp-card")[1].matches(".selected"), "Direcional");
     buttons[15].pressed = false;

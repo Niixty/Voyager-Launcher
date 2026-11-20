@@ -617,3 +617,99 @@ pre {
   .update-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .update-actions button { width: 100%; }
 }
+
+
+/* Controller prompts in Big Picture — native PNGs bundled for offline use. */
+.big-picture .bp-topbar {
+  gap: 18px;
+  align-items: center;
+}
+.bp-heading {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.5vw, 22px);
+}
+.bp-logo {
+  width: clamp(44px, 4vw, 72px);
+  height: clamp(44px, 4vw, 72px);
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.bp-heading small {
+  display: block;
+  letter-spacing: .13em;
+  font-size: clamp(10px, .8vw, 14px);
+  font-weight: 650;
+  color: var(--accent);
+}
+.bp-heading h1 { margin: 3px 0 0; }
+.bp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 36px);
+}
+.bp-family {
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: clamp(12px, .95vw, 18px);
+}
+.bp-exit {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  min-width: 110px;
+  padding: 7px 18px;
+}
+.bp-controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: clamp(12px, 2.4vw, 40px);
+}
+.bp-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+  font-size: clamp(13px, 1vw, 21px);
+  color: #e5eaf2;
+}
+.bp-hint-icons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+.gp-icon {
+  display: inline-block;
+  width: clamp(30px, 2.2vw, 46px);
+  height: clamp(30px, 2.2vw, 46px);
+  object-fit: contain;
+  vertical-align: middle;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+.bp-exit .gp-icon {
+  width: 32px;
+  height: 32px;
+}
+.big-picture footer {
+  border-top: 1px solid #ffffff20;
+  padding-top: 18px;
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+.bp-status { flex: 1 1 150px; min-height: 1.5em; }
+.bp-card.selected {
+  outline-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 12px 32px #0006;
+}
+@media (max-width: 790px) {
+  .bp-family { display: none; }
+  .bp-controls { justify-content: flex-start; }
+  .big-picture { padding: 3vh 3vw 2vh; }
+}

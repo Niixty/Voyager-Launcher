@@ -216,3 +216,27 @@ O histórico de instalações e o diagnóstico da biblioteca continuam
 disponíveis na mesma seção, mas em uma área expansível separada.
 A tarefa automática `--check-updates` só verifica se existe uma release,
 sem instalar silenciosamente ao fechar o aplicativo.
+
+
+### Ícone do Windows e biblioteca de comandos para Big Picture
+
+O arquivo `app/assets/VoyagerLauncher.ico` contém o novo ícone do Voyager
+em várias resoluções (16–256 px) e é a fonte única de identidade do executável,
+do `VoyagerUpdater.exe`, da janela, da barra de tarefas e da interface WebView2.
+O workflow Windows gera os recursos `.syso` de ambos os aplicativos a partir
+desse mesmo arquivo, evitando ícones diferentes entre os executáveis.
+
+A pasta `desktop/controller-icons/` inclui os **38 PNGs transparentes** do
+pacote *Flat Gamepad Icons* de RobTheFiveNine, na resolução 150 DPI:
+18 genéricos (direcional, analógicos, L3/R3, Start/Select), 11 Xbox e
+9 PlayStation. Para reutilizá-los em novas funções do Big Picture, importe
+`desktop/controller-icons.js` antes da tela que deseja renderizar e utilize
+`VoyagerGamepadIcons.icon("xb_a")`,
+`VoyagerGamepadIcons.button(0, "playstation")` ou
+`VoyagerGamepadIcons.stick("right", "up")`.
+O registro inclui mapeamento dos botões padrão da Gamepad API (0–16).
+
+O Big Picture mostra ícones para **Navegar**, **Iniciar jogo** e **Voltar**,
+detectando automaticamente os controles PlayStation DualShock/DualSense e
+usando Xbox para os demais controles compatíveis. Tudo funciona offline.
+Créditos e licença CC BY-SA 4.0: `desktop/controller-icons/LICENSE.md`.
