@@ -211,6 +211,11 @@ func steamGridAPIRequest(ctx context.Context, endpoint, key string) (steamGridEn
     return result,nil
 }
 
+// SteamGridSavedGameTitle checks the persisted name before prompting for the API key.
+func (s *Studio) SteamGridSavedGameTitle(id string) (string,error) {
+    return steamGridSavedTitle(id)
+}
+
 func (s *Studio) SteamGridGames(id string) ([]SteamGridGame,error) {
     title,err:=steamGridSavedTitle(id)
     if err!=nil{return nil,err}
