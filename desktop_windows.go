@@ -325,12 +325,14 @@ func (s *Studio) Frame(id string, l ll.Layout) (string, error) {
 	return renderFrame(c, l.Normalize(), cart, bg, heroaccent.FromFile(hero), true)
 }
 func renderFrame(c gameConfig, l ll.Layout, cart, bg *img, accent uint32, paintBackground bool) (string, error) {
-	p, b, e := newBitmapGraphics(960, 540)
+	// Prévia Full HD: os antigos 960x540 deixavam os textos embaçados ao ampliar
+	// o editor ou utilizar Windows com escala de tela alta.
+	p, b, e := newBitmapGraphics(1920, 1080)
 	if e != nil {
 		return "", e
 	}
 	defer call(pGdipDisposeImage, b)
-	drawOverlayPass(p, c, 0, 0, 960, 540, 50, "Preparando a tela do jogo", "", cart, bg, accent, 0, l, false, paintBackground)
+	drawOverlayPass(p, c, 0, 0, 1920, 1080, 50, "Preparando a tela do jogo", "", cart, bg, accent, 0, l, false, paintBackground)
 	p.close()
 	dir, e := os.MkdirTemp("", "voyager-preview-")
 	if e != nil {

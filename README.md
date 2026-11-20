@@ -139,3 +139,14 @@ O log da instalação indicava que o arquivo preparado estava ausente. Ele não 
 ### Teste visual de loading (10 segundos)
 
 No editor da tela de loading, clique em **Testar loading (10 s)** ao lado de **Print do layout salvo (50%)**. O aplicativo abre a mesma tela cheia nativa, anima o cartucho e fecha automaticamente após dez segundos, sem iniciar o jogo nem procurar seus processos. A prévia usa o layout salvo do jogo; salve as mudanças do editor antes de testar. Também pode ser acionada com `VoyagerLauncher.exe --test-loading ID_DO_JOGO`.
+
+### Alinhamento e nitidez no editor de loading
+
+A prévia do editor agora é gerada em **1920 × 1080**, inclusive as camadas usadas
+na animação do cartucho. Selecione um elemento de texto no editor e configure
+**Alinhamento horizontal do texto** (esquerda, centro ou direita) e
+**Alinhamento vertical do texto** (topo, centro ou embaixo); esses ajustes
+controlam o texto dentro da caixa, sem mover o quadro. A grade **Posição rápida
+na tela** tem nove atalhos para mover a caixa inteira aos cantos, centros das
+bordas ou centro da tela. O movimento manual continua disponível. Layouts
+antigos mantêm o alinhamento original ao topo e à esquerda até serem alterados.

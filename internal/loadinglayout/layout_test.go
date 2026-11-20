@@ -40,6 +40,37 @@ func TestClampAndFallback(t *testing.T){
  if n.Find(Phase).Color!="auto" {t.Fatal("bad color")}
  if Snap(46,10)!=50 || Snap(44,10)!=40 {t.Fatal("snap")}
 }
+func TestTextAlignmentPersistsAndValidates(t *testing.T) {
+    l := Default()
+    title := l.Find(Title)
+    title.TextAlign = "right"
+    title.VerticalAlign = "bottom"
+    path := filepath.Join(t.TempDir(), "loading_layout.json")
+    if err := Save(path, l); err != nil { t.Fatal(err) }
+    loaded, err := Load(path)
+    if err != nil { t.Fatal(err) }
+    actual := loaded.Find(Title)
+    if actual.TextAlign != "right" || actual.VerticalAlign != "bottom" {
+        t.Fatalf("alinhamentos não persistidos: %+v", actual)
+    }
+    // Compatibilidade com layouts antigos sem campos de alinhamento.
+    legacy := Default()
+    legacy.Find(Title).TextAlign = ""
+    legacy.Find(Title).VerticalAlign = ""
+    normalizedLegacy := legacy.Normalize()
+    legacyNormalized := normalizedLegacy.Find(Title)
+    if legacyNormalized.TextAlign != "left" || legacyNormalized.VerticalAlign != "top" {
+        t.Fatalf("padrão legado inesperado: %+v", legacyNormalized)
+    }
+    loaded.Find(Title).TextAlign = "invalid"
+    loaded.Find(Title).VerticalAlign = "invalid"
+    loaded.Find(Cartridge).TextAlign = "right"
+    loaded.Find(Cartridge).VerticalAlign = "bottom"
+    normalized := loaded.Normalize()
+    if normalized.Find(Title).TextAlign != "left" || normalized.Find(Title).VerticalAlign != "top" { t.Fatal("alinhamento inválido não foi corrigido") }
+    if normalized.Find(Cartridge).TextAlign != "" || normalized.Find(Cartridge).VerticalAlign != "" { t.Fatal("alinhamento indevido no cartucho") }
+}
+
 func TestUnknownElementsIgnored(t *testing.T){
  l:=Default()
  l.Elements=append(l.Elements,Element{ID:"bad",X:10,Y:10,W:100,H:100,Visible:true})

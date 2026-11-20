@@ -307,6 +307,34 @@ label.field {
 .tools {
   margin: 12px 0;
 }
+.alignQuick {
+  margin: 14px 0 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.alignHeading {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.alignQuick small {
+  display: block;
+  margin: 7px 0 10px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.anchorPresets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 320px;
+}
+.anchorPresets button {
+  min-height: 35px;
+  font-size: 18px;
+  font-weight: 600;
+}
 .tools label {
   white-space: nowrap;
 }

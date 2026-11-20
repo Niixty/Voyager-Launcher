@@ -59,6 +59,21 @@
           ?.style.backgroundImage.includes("data:image/png"),
       "Composição nativa",
     );
+    const layer = [...document.querySelectorAll(".panel select")].find((select) =>
+      [...select.options].some((option) => option.value === "title"),
+    );
+    layer.value = "title";
+    layer.dispatchEvent(new Event("change", { bubbles: true }));
+    const textAlign = document.querySelector('[data-text-align="horizontal"]');
+    if (!textAlign) throw Error("Alinhamento horizontal ausente");
+    textAlign.value = "right";
+    textAlign.dispatchEvent(new Event("change", { bubbles: true }));
+    const verticalAlign = document.querySelector('[data-text-align="vertical"]');
+    if (!verticalAlign) throw Error("Alinhamento vertical ausente");
+    verticalAlign.value = "bottom";
+    verticalAlign.dispatchEvent(new Event("change", { bubbles: true }));
+    const anchors = document.querySelectorAll(".anchorPresets button");
+    if (anchors.length !== 9) throw Error("Atalhos de posição ausentes");
     const props = document.querySelector(".panel .fields input");
     set(props, "240");
     props.dispatchEvent(new Event("change"));
@@ -69,6 +84,11 @@
       () => document.querySelector("#notice").textContent === "Layout salvo",
       "Salvar layout",
     );
+    const saved = await api.Layout("Smoke");
+    const titleSaved = saved.elements.find((n) => n.id === "title");
+    if (titleSaved.textAlign !== "right" || titleSaved.verticalAlign !== "bottom") {
+      throw Error("Alinhamento não persistido no layout");
+    }
     await probe.Capture("editor");
     click("Configurações");
     await wait(() => heading("Configurações"), "Configurações");

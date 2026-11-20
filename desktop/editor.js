@@ -256,7 +256,34 @@ async function editor(g) {
       n.color || "auto",
     );
     color.onchange = () => edit((obj) => (obj.color = color.value));
-    if (n.fontSize) fields.append(field("Cor", color));
+    if (n.fontSize) {
+      fields.append(field("Cor", color));
+      const textAlign = options(
+        [
+          ["left", "Esquerda"],
+          ["center", "Centro"],
+          ["right", "Direita"],
+        ],
+        n.textAlign || "left",
+      );
+      textAlign.dataset.textAlign = "horizontal";
+      textAlign.onchange = () => edit((obj) => (obj.textAlign = textAlign.value));
+      const verticalAlign = options(
+        [
+          ["top", "Topo"],
+          ["middle", "Centro"],
+          ["bottom", "Embaixo"],
+        ],
+        n.verticalAlign || "top",
+      );
+      verticalAlign.dataset.textAlign = "vertical";
+      verticalAlign.onchange = () =>
+        edit((obj) => (obj.verticalAlign = verticalAlign.value));
+      fields.append(
+        field("Alinhamento horizontal do texto", textAlign),
+        field("Alinhamento vertical do texto", verticalAlign),
+      );
+    }
     const tools = row(
       check("Visível", n.visible, (v) => edit((obj) => (obj.visible = v))),
     );
@@ -279,7 +306,7 @@ async function editor(g) {
       );
     const align = options(
       [
-        ["", "Alinhar…"],
+        ["", "Posicionar elemento…"],
         ["l", "Esquerda"],
         ["cx", "Centro horizontal"],
         ["r", "Direita"],
@@ -308,6 +335,32 @@ async function editor(g) {
       ),
     );
     props.append(tools);
+    // A grade 3x3 move a caixa completa, sem alterar o alinhamento do texto.
+    const anchors = el("div", null, "anchorPresets");
+    for (const [label, name, horizontal, vertical] of [
+      ["↖", "Topo esquerdo", 0, 0],
+      ["↑", "Topo central", 0.5, 0],
+      ["↗", "Topo direito", 1, 0],
+      ["←", "Centro esquerdo", 0, 0.5],
+      ["●", "Centro da tela", 0.5, 0.5],
+      ["→", "Centro direito", 1, 0.5],
+      ["↙", "Inferior esquerdo", 0, 1],
+      ["↓", "Inferior central", 0.5, 1],
+      ["↘", "Inferior direito", 1, 1],
+    ]) {
+      const button = btn(label, () =>
+        edit((o) => {
+          o.x = Math.round((1600 - o.width) * horizontal);
+          o.y = Math.round((900 - o.height) * vertical);
+        }),
+      );
+      button.title = "Posicionar: " + name;
+      button.setAttribute("aria-label", "Posicionar: " + name);
+      anchors.append(button);
+    }
+    const heading = el("div", "POSIÇÃO RÁPIDA NA TELA", "alignHeading");
+    const hint = el("small", "Move o elemento inteiro. Para alinhar somente o texto, use os campos acima.");
+    props.append(add(el("div", null, "alignQuick"), heading, hint, anchors));
   }
   let frameTimer;
   function requestFrame() {

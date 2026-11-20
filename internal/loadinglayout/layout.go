@@ -32,6 +32,10 @@ type Element struct {
     FontSize float32 `json:"fontSize,omitempty"`
     Visible bool `json:"visible"`
     Color string `json:"color,omitempty"`
+    // O alinhamento do texto é independente da posição da caixa.
+    // Layouts antigos sem esses campos permanecem alinhados à esquerda e ao topo.
+    TextAlign string `json:"textAlign,omitempty"`
+    VerticalAlign string `json:"verticalAlign,omitempty"`
 }
 
 type Layout struct {
@@ -93,7 +97,14 @@ func (e *Element) Normalize(){
     e.X=clamp(e.X,0,VirtualWidth-e.W)
     e.Y=clamp(e.Y,0,VirtualHeight-e.H)
     e.FontSize=float32(clamp(float64(e.FontSize),9,90))
-    if !IsText(e.ID) {e.FontSize=0}
+    if !IsText(e.ID) {
+        e.FontSize=0
+        e.TextAlign=""
+        e.VerticalAlign=""
+    } else {
+        switch e.TextAlign {case "left","center","right":default:e.TextAlign="left"}
+        switch e.VerticalAlign {case "top","middle","bottom":default:e.VerticalAlign="top"}
+    }
     if e.Color!="hero" && e.Color!="white" && e.Color!="muted" && e.Color!="auto" {
         e.Color="auto"
     }

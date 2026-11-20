@@ -125,6 +125,9 @@ func (p *painter) ellipse(x, y, w, h int, c palette) {
 	call(pGdipDeleteBrush, b)
 }
 func (p *painter) text(x, y, w, h int, s string, size float32, c palette, bold bool) {
+	p.textAligned(x, y, w, h, s, size, c, bold, "left", "top")
+}
+func (p *painter) textAligned(x, y, w, h int, s string, size float32, c palette, bold bool, horizontal, vertical string) {
 	if s == "" || w <= 0 || h <= 0 {
 		return
 	}
@@ -146,7 +149,18 @@ func (p *painter) text(x, y, w, h int, s string, size float32, c palette, bold b
 	call(pGdipCreateSolidFill, uintptr(c), uintptr(unsafe.Pointer(&brush)))
 	t := syscall.StringToUTF16(strings.ReplaceAll(s,"\x00","�"))
 	rc := rectF{float32(x), float32(y), float32(w), float32(h)}
-	call(pGdipDrawString, p.g, uintptr(unsafe.Pointer(&t[0])), uintptr(len(t)-1), font, uintptr(unsafe.Pointer(&rc)), 0, brush)
+	var format uintptr
+	// GDI+ StringAlignment: Near=0, Center=1, Far=2.
+	// O alinhamento é aplicado dentro da caixa, sem mover o elemento.
+	if call(pGdipCreateStringFormat, 0, 0, uintptr(unsafe.Pointer(&format))) == 0 && format != 0 {
+		var hAlign, vAlign uintptr
+		switch horizontal {case "center":hAlign=1;case "right":hAlign=2}
+		switch vertical {case "middle":vAlign=1;case "bottom":vAlign=2}
+		call(pGdipSetStringFormatAlign, format, hAlign)
+		call(pGdipSetStringFormatLineAlign, format, vAlign)
+	}
+	call(pGdipDrawString, p.g, uintptr(unsafe.Pointer(&t[0])), uintptr(len(t)-1), font, uintptr(unsafe.Pointer(&rc)), format, brush)
+	if format != 0 {call(pGdipDeleteStringFormat, format)}
 	call(pGdipDeleteBrush, brush)
 	call(pGdipDeleteFont, font)
 	call(pGdipDeleteFontFamily, family)

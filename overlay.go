@@ -204,7 +204,7 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
         if failed && (n.ID==ll.Heading || n.ID==ll.Phase) {
             themeColor=overlayTheme.Color("headingError")
         }
-        p.text(xx,yy,ww,hh,value,n.FontSize*float32(s),palette(themeColor),bold)
+        p.textAligned(xx,yy,ww,hh,value,n.FontSize*float32(s),palette(themeColor),bold,n.TextAlign,n.VerticalAlign)
     }
 }
 func loadBlurry(src string) *img {
