@@ -60,7 +60,7 @@ func sgdbCipher(raw []byte, encrypt bool) ([]byte, error) {
     if result == 0 {
         return nil, fmt.Errorf("o Windows não conseguiu proteger a chave SteamGridDB: %w", err)
     }
-    defer sgdbFree.Call(uintptr(unsafe.Pointer(output.Data))
+    defer sgdbFree.Call(uintptr(unsafe.Pointer(output.Data)))
     if output.Data == nil || output.Size == 0 || output.Size > 8192 {
         return nil, errors.New("resposta de proteção de dados inválida")
     }
