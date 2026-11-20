@@ -84,7 +84,11 @@ const VoyagerGamepadIcons = (() => {
     // The Web Gamepad API uses the same "standard" button indices for Xbox
     // and PlayStation, but its pad.id can still identify the glyph family.
     const id = String(pad?.id || "");
-    if (/playstation|dualshock|dualsense|wireless controller|sony|054c|0ce6/i.test(id))
+    // Xbox identifiers must win over the generic "Wireless Controller" phrase.
+    if (/xbox|xinput|microsoft|045e/i.test(id)) return "xbox";
+    if (/playstation|dualshock|dualsense|sony|054c|0ce6/i.test(id))
+      return "playstation";
+    if (/^wireless controller(?:\\s*\\(.*\\))?$/i.test(id.trim()))
       return "playstation";
     return "xbox";
   }
