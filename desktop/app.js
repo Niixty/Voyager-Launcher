@@ -684,6 +684,8 @@ async function steamGridBrowser(g, kind) {
     }
   }
   try {
+    const savedTitle = await api.SteamGridSavedGameTitle(g.ID);
+    info.textContent = "Buscando com o nome salvo do jogo: " + savedTitle;
     if (!(await api.SteamGridKeyConfigured())) {
       throw Error("Configure sua chave SteamGridDB em Configurações antes de pesquisar.");
     }

@@ -51,6 +51,17 @@
         "Salvar " + kind,
       );
     }
+    const searches = [...document.querySelectorAll("button")].filter(
+      (b) => b.textContent === "Procurar na base de dados",
+    );
+    if (searches.length !== 2) throw Error("Hero/Grid precisam oferecer SteamGridDB, mas Cartridge não.");
+    click("VibePollo");
+    await wait(
+      () => document.body.innerText.includes("Detached Commands / Comandos em segundo plano"),
+      "Instruções VibePollo",
+    );
+    if (!document.body.innerText.includes("Image / Imagem (PNG)"))
+      throw Error("Caminho da capa no VibePollo ausente");
     click("Editor de loading");
     await wait(
       () =>
