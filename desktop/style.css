@@ -668,12 +668,22 @@ pre {
 .bp-header-actions {
   display: flex;
   align-items: center;
-  gap: clamp(12px, 2vw, 36px);
+  justify-content: flex-end;
+  gap: clamp(10px, 1.2vw, 22px);
+  margin-left: auto;
 }
-.bp-family {
-  color: var(--muted);
+.bp-clock {
+  color: #f3f6fb;
+  font-size: clamp(16px, 1.3vw, 22px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  font-size: clamp(12px, .95vw, 18px);
+}
+.bp-clock-divider {
+  color: rgba(255, 255, 255, .46);
+  font-size: clamp(17px, 1.45vw, 24px);
+  line-height: 1;
+  user-select: none;
 }
 .bp-exit {
   display: inline-flex;
@@ -731,7 +741,7 @@ pre {
   box-shadow: 0 0 0 1px var(--accent), 0 12px 32px #0006;
 }
 @media (max-width: 790px) {
-  .bp-family { display: none; }
+  .bp-header-actions { gap: 10px; }
   .bp-controls { justify-content: flex-start; }
   .big-picture { padding: 3vh 3vw 2vh; }
 }
@@ -955,6 +965,22 @@ pre {
   width: 28px;
   height: 28px;
 }
+/* Soft glass buttons over the selected game's Hero; keep glyphs and text clear. */
+.big-picture .bp-header-actions > .bp-open-settings,
+.big-picture .bp-header-actions > .bp-exit {
+  background: rgba(18, 23, 31, .48);
+  border: 1px solid rgba(255, 255, 255, .15);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+}
+.big-picture .bp-header-actions > .bp-open-settings:hover,
+.big-picture .bp-header-actions > .bp-exit:hover,
+.big-picture .bp-header-actions > .bp-open-settings:focus-visible,
+.big-picture .bp-header-actions > .bp-exit:focus-visible {
+  background: rgba(30, 39, 52, .67);
+  border-color: rgba(255, 255, 255, .32);
+}
 .bp-settings[hidden] { display: none !important; }
 .bp-settings {
   position: absolute;
@@ -1013,7 +1039,8 @@ pre {
   box-shadow: none;
 }
 @media (max-width: 720px) {
-  .bp-family {display: none;}
+  .bp-header-actions { gap: 8px; }
+  .bp-clock { font-size: 14px; }
   .bp-open-settings { min-height: 42px; }
   .bp-settings-surface { padding: 20px; }
   .bp-setting { grid-template-columns: 1fr auto; padding: 13px; }

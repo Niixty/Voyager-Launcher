@@ -23,13 +23,16 @@ async function openBigPicture() {
   const heading = add(el("div", null, "bp-heading"), logo, add(
     el("div"), el("small", "BIBLIOTECA DE JOGOS"), platformHeading,
   ));
-  const familyLabel = el("small", "", "bp-family");
+  const clock = el("time", "", "bp-clock");
+  clock.setAttribute("aria-label", "Horário local");
+  const clockDivider = el("span", "|", "bp-clock-divider");
+  clockDivider.setAttribute("aria-hidden", "true");
   const settingsButton = btn("", () => showSettings(true), "bp-open-settings");
   settingsButton.setAttribute("aria-label", "Configurações (Select)");
   const exit = btn("", close, "bp-exit");
   exit.setAttribute("aria-label", "Sair do Big Picture");
   const headerActions = add(
-    el("div", null, "bp-header-actions"), familyLabel, settingsButton, exit,
+    el("div", null, "bp-header-actions"), clock, clockDivider, settingsButton, exit,
   );
   const grid = el("div", null, "bp-grid");
   const status = el("p", "", "bp-status");
@@ -118,6 +121,8 @@ async function openBigPicture() {
   panel.append(background, add(el("header", null, "bp-topbar"), heading, headerActions),
     grid, footer, settingsView);
   document.body.append(panel);
+  updateClock();
+  const clockInterval = window.setInterval(updateClock, 10000);
   main.inert = document.querySelector("aside").inert = true;
   window.runtime.WindowFullscreen();
   renderPreferences();
@@ -126,6 +131,11 @@ async function openBigPicture() {
   document.addEventListener("keydown", key, true);
   frame = requestAnimationFrame(poll);
 
+  function updateClock() {
+    const now = new Date();
+    clock.textContent = String(now.getHours()).padStart(2, "0") + ":" +
+      String(now.getMinutes()).padStart(2, "0");
+  }
   function queueSave() {
     const snapshot = { ...prefs };
     const task = saveChain.catch(() => {}).then(() => api.SaveBigPictureOptions(snapshot));
@@ -173,9 +183,6 @@ async function openBigPicture() {
     currentFamily = family;
     renderedButtonStyle = prefs.buttonStyle;
     panel.dataset.controller = family;
-    familyLabel.textContent = prefs.buttonStyle !== "auto"
-      ? "Ícones " + (family === "playstation" ? "PlayStation" : "Xbox")
-      : (family === "playstation" ? "Controle PlayStation" : "Controle Xbox / genérico");
     exit.replaceChildren(
       iconPack?.button(1, family, "") || el("span", "B"), el("span", "Sair"),
     );
@@ -247,6 +254,7 @@ async function openBigPicture() {
     // every queued preference write has finished before leaving the view.
     await saveChain.catch(() => {});
     cancelAnimationFrame(frame);
+    clearInterval(clockInterval);
     document.removeEventListener("keydown", key, true);
     panel.remove();
     main.inert = document.querySelector("aside").inert = false;

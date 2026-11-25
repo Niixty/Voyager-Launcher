@@ -339,6 +339,20 @@
     await wait(() => document.querySelectorAll(".bp-card").length === 2, "Capas Big Picture");
     if (document.querySelector(".bp-heading h1")?.textContent !== "Super Nintendo")
       throw Error("Cabeçalho do Big Picture não mostra a plataforma selecionada");
+    // The top-right bar shows local time and translucent glass actions.
+    const headerActions = document.querySelector(".bp-header-actions");
+    const localTime = headerActions?.querySelector(".bp-clock")?.textContent || "";
+    if (!/^\\d{2}:\\d{2}$/.test(localTime) ||
+        headerActions?.querySelector(".bp-clock-divider")?.textContent !== "|" ||
+        headerActions?.querySelector(".bp-family"))
+      throw Error("Topo do Big Picture deveria mostrar HH:mm | Configurações, Sair");
+    for (const name of [".bp-open-settings", ".bp-exit"]) {
+      const element = headerActions.querySelector(name);
+      const computed = getComputedStyle(element);
+      if (!computed.backgroundColor.startsWith("rgba(") ||
+          !computed.backdropFilter.includes("blur("))
+        throw Error("Botão sem fundo translúcido com blur: " + name);
+    }
     const iconAPI = window.VoyagerGamepadIcons;
     if (!iconAPI || iconAPI.names.length !== 38)
       throw Error("Registro completo de ícones genéricos/Xbox/PlayStation ausente");
