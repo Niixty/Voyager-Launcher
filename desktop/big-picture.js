@@ -236,6 +236,15 @@ async function openBigPicture() {
     grid.style.setProperty("--bp-icon-scale", String(Number(effectiveScale.toFixed(3))));
     grid.style.setProperty("--bp-selected-scale", String(Number((effectiveScale * 1.055).toFixed(3))));
     grid.style.setProperty("--bp-cartridge-spacing", prefs.cartridgeSpacing + "px");
+    // Track size must shrink together with the artwork. At zero spacing,
+    // shrinking only the PNG with transform() leaves a large invisible
+    // remainder of each grid cell between neighboring cartridges.
+    const trackScale = Math.min(1, effectiveScale);
+    const coverScale = effectiveScale / trackScale;
+    grid.style.setProperty("--bp-cartridge-track-scale", String(Number(trackScale.toFixed(3))));
+    grid.style.setProperty("--bp-cartridge-visual-scale", String(Number(coverScale.toFixed(3))));
+    grid.style.setProperty("--bp-cartridge-visual-selected-scale", String(Number((coverScale * 1.055).toFixed(3))));
+    grid.style.setProperty("--bp-neighbor-push", Math.min(7, 2 + prefs.cartridgeSpacing / 6).toFixed(1) + "px");
     panel.classList.toggle("bp-hide-title", !prefs.showTitle);
     panel.classList.toggle("bp-hide-platform", !prefs.showPlatform);
     panel.classList.toggle("bp-blur-hero", prefs.blurBackground);
