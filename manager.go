@@ -240,6 +240,16 @@ func (m *managerState) refreshCommands() {
 	m.set("Command", fmt.Sprintf("\"%s\" --game \"%s\"", exe, id))
 	m.set("Cover", filepath.Join(gameDir(id), "grid.png"))
 }
+// A new game must never overwrite an existing Game/ID. Starting from
+// NovoJogo2 also handles Windows case-insensitive paths safely.
+func nextAvailableClassicGameID(exists func(string) bool) string {
+    if !exists("NovoJogo") {return "NovoJogo"}
+    for i:=2;i<100000;i++ {
+        id:=fmt.Sprintf("NovoJogo%d",i)
+        if !exists(id) {return id}
+    }
+    return ""
+}
 func (m *managerState) resetNew() {
 	m.activeID = ""
 	m.creating = true
@@ -261,7 +271,10 @@ func (m *managerState) resetNew() {
 		m.grid = nil
 	}
 	call(pSendMessage, m.inputs["ID"], 0x00CF, 0, 0)
-	m.set("ID", "NovoJogo")
+	m.set("ID", nextAvailableClassicGameID(func(id string) bool {
+        _,err:=os.Stat(configFile(id))
+        return err==nil || !os.IsNotExist(err)
+    }))
 	m.set("Title", "")
 	m.set("Platform", "Windows / Emulador")
 	m.set("CoreName", "Jogo")
@@ -344,6 +357,12 @@ func (m *managerState) readUI() gameConfig {
 }
 func (m *managerState) save() error {
 	id := m.field("ID")
+    if !validID.MatchString(id) {return fmt.Errorf("Informe um ID válido para o novo jogo")}
+    if m.creating {
+        if _,err:=os.Stat(configFile(id));err==nil {
+            return fmt.Errorf("Já existe um jogo com ID %q. Escolha outro ID para não sobrescrever o cadastro.",id)
+        } else if !os.IsNotExist(err) {return fmt.Errorf("Não foi possível verificar o ID: %w",err)}
+    }
 	c := m.readUI()
 	if m.activeID != "" && c.Mode != "retroarch" {
 		old, e := readConfig(m.activeID)

@@ -25,3 +25,7 @@
 /app/.voyager-update.lock
 /app/VoyagerLauncher.next.exe.sha256
 /app/loading_default.json.before_global_*.json
+
+# Configuração privada do Big Picture (não bloquear Git Sync)
+/app/bigpicture.json
+/bigpicture.json

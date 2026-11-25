@@ -103,7 +103,9 @@ jobs:
           name: Voyager-Windows-x64
           path: dist/*
       - name: Publicar nova versao automaticamente (somente main)
+        id: publish_release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        continue-on-error: true
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v0.9.${{ github.run_number }}
@@ -111,10 +113,44 @@ jobs:
           name: Voyager Launcher v0.9.${{ github.run_number }}
           make_latest: 'true'
           prerelease: false
-          generate_release_notes: true
+          # Automatic release-notes creation triggered intermittent GitHub 500.
+          generate_release_notes: false
+          body: |
+            Voyager Launcher Windows x64.
+            Compilação e testes automatizados aprovados.
+            Atualização automática segura com verificação SHA-256.
           files: |
             dist/VoyagerLauncher.exe
             dist/VoyagerUpdater.exe
             dist/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Retry release publication without rebuilding or changing verified bits.
+      - name: Recuperar publicacao se o GitHub falhar
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.publish_release.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $repo = 'Niixty/Voyager-Launcher'
+          $tag = 'v0.9.${{ github.run_number }}'
+          $sha = '${{ github.sha }}'
+          $assets = @('dist/VoyagerLauncher.exe','dist/VoyagerUpdater.exe','dist/SHA256SUMS.txt')
+          for ($attempt = 1; $attempt -le 6; $attempt++) {
+            Write-Host "Recuperando publicacao $tag (tentativa $attempt de 6)"
+            & gh release view $tag --repo $repo *> $null
+            if ($LASTEXITCODE -eq 0) {
+              & gh release upload $tag @assets --repo $repo --clobber
+            } else {
+              & gh release create $tag @assets --repo $repo --target $sha --title "Voyager Launcher $tag" --notes "Voyager Launcher Windows x64. Testes automatizados aprovados. Atualização segura com SHA-256." --latest
+            }
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Release publicada: $tag"
+              break
+            }
+            if ($attempt -eq 6) {
+              throw "O GitHub nao publicou $tag apos 6 tentativas. Executaveis preservados nos artefatos."
+            }
+            Start-Sleep -Seconds ([Math]::Min(30,4*$attempt))
+          }

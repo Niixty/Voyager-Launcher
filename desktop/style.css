@@ -849,3 +849,119 @@ pre {
 @media (max-width: 700px) {
   .appearanceGrid { grid-template-columns: 1fr; }
 }
+
+/* Big Picture 2.0: navigable settings, game-specific Hero, Grid/Cartridge. */
+.big-picture {
+  isolation: isolate;
+  overflow: hidden;
+}
+.bp-hero-background {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(ellipse at top left, #263644, #10151c 64%);
+}
+.bp-hero-background img {
+  position: absolute;
+  inset: -3%;
+  width: 106%;
+  height: 106%;
+  object-fit: cover;
+  object-position: center;
+  filter: none;
+}
+.bp-blur-hero .bp-hero-background img { filter: blur(23px); }
+.bp-hero-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(6,10,17,var(--bp-dim,.65));
+}
+.bp-topbar, .bp-grid, .big-picture footer { position: relative; z-index: 1; }
+.bp-open-settings {
+  min-height: 50px;
+  padding: 7px 16px;
+  font-size: clamp(13px,1vw,20px);
+}
+.big-picture.bp-hide-title .bp-card-title,
+.big-picture.bp-hide-platform .bp-card-platform { display: none; }
+.bp-card-platform {
+  color: #b5c6d5;
+  font-size: clamp(12px,.86vw,18px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bp-cover > span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.bp-cover img { z-index: 1; }
+.bp-cartridges .bp-grid {
+  grid-template-columns: repeat(auto-fill,minmax(clamp(190px,22vw,395px),1fr));
+}
+.bp-cartridges .bp-cover {
+  aspect-ratio: 3/2;
+  background: rgba(10,16,23,.38);
+}
+.bp-cartridges .bp-cover img { object-fit: contain; }
+.bp-settings[hidden] { display: none !important; }
+.bp-settings {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 4vw;
+  background: rgba(4,8,13,.86);
+  backdrop-filter: blur(16px);
+}
+.bp-settings-surface {
+  width: min(850px,94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #171e28;
+  border: 1px solid #596b7f;
+  border-radius: 19px;
+  padding: clamp(18px,3vw,38px);
+  box-shadow: 0 15px 80px #000a;
+  display: grid;
+  gap: 22px;
+}
+.bp-settings-header { display: grid; gap: 6px; }
+.bp-settings-header h2 {
+  margin: 0;
+  font-size: clamp(23px,2.4vw,41px);
+}
+.bp-settings-header p { margin: 0; color: #b9c7d5; }
+.bp-settings-list { display: grid; gap: 9px; }
+.bp-setting {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  text-align: left;
+  gap: 15px;
+  padding: 17px 22px;
+  background: #242d3a;
+  font-size: clamp(15px,1.2vw,23px);
+}
+.bp-setting strong { color: #c0e9ff; font-size: .9em; font-weight: 650; }
+.bp-setting-arrow { color: #a1b9d0; font-size: 16px; }
+.bp-setting-arrow::after { content: "›"; }
+.bp-settings-back { min-height: 48px; }
+.bp-settings button:focus-visible,
+.bp-settings button:focus,
+.bp-card.selected {
+  outline: 3px solid #9edcfb;
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  .bp-family {display: none;}
+  .bp-open-settings { min-height: 42px; }
+  .bp-settings-surface { padding: 20px; }
+  .bp-setting { grid-template-columns: 1fr auto; padding: 13px; }
+  .bp-setting-arrow {display:none;}
+}

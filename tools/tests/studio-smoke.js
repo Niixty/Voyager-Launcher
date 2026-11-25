@@ -273,6 +273,54 @@
     await probe.Capture("biblioteca");
     await api.CopyGame("Smoke", "Smoke2");
     await library();
+
+    // Simulate SteamGridDB replies arriving OUT OF ORDER. Results for game A
+    // must never replace those for game B after a game-picker change.
+    const steamMethods = {
+      saved: api.SteamGridSavedGameTitle,
+      key: api.SteamGridKeyConfigured,
+      games: api.SteamGridGames,
+      images: api.SteamGridImages,
+    };
+    const pendingImageRequests = [];
+    try {
+      api.SteamGridSavedGameTitle = async () => "Órbita";
+      api.SteamGridKeyConfigured = async () => true;
+      api.SteamGridGames = async () => [
+        {id: 101, name: "Jogo A"}, {id: 202, name: "Jogo B"},
+      ];
+      api.SteamGridImages = (id, kind, pageNumber) =>
+        new Promise((resolve) => pendingImageRequests.push({id,kind,pageNumber,resolve}));
+      const modalPromise = steamGridBrowser(games[0], "grid");
+      await wait(() => pendingImageRequests.length === 1,
+        "Busca da primeira seleção SteamGridDB");
+      const selector = document.querySelector(".sgdb-dialog .sgdb-game-picker select");
+      if (!selector) throw Error("Seletor de jogos SteamGridDB ausente");
+      selector.value = "202";
+      selector.dispatchEvent(new Event("change", {bubbles:true}));
+      await wait(() => pendingImageRequests.length === 2,
+        "Nova busca do SteamGridDB não iniciou enquanto anterior estava pendente");
+      const artwork = (id) => ({
+        items: [{url:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO/JhX8AAAAASUVORK5CYII=",thumb:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO/JhX8AAAAASUVORK5CYII=",width:id,height:900}],
+        total:1,limit:50,
+      });
+      pendingImageRequests[1].resolve(artwork(202));
+      await wait(() => document.querySelectorAll(".sgdb-gallery .sgdb-item").length === 1,
+        "Imagens da segunda seleção");
+      pendingImageRequests[0].resolve(artwork(101));
+      await modalPromise;
+      await new Promise((r) => setTimeout(r, 150));
+      if (document.querySelectorAll(".sgdb-gallery .sgdb-item").length !== 1 ||
+          !document.querySelector(".sgdb-gallery .sgdb-item img")?.alt.includes("202 × 900"))
+        throw Error("Galeria antiga sobrescreveu o jogo selecionado");
+      document.querySelector(".sgdb-dialog").close();
+    } finally {
+      api.SteamGridSavedGameTitle = steamMethods.saved;
+      api.SteamGridKeyConfigured = steamMethods.key;
+      api.SteamGridGames = steamMethods.games;
+      api.SteamGridImages = steamMethods.images;
+      document.querySelector(".sgdb-dialog")?.close();
+    }
     const buttons = Array.from({length: 16}, () => ({pressed:false}));
     const pad = {mapping:"standard", connected:true, buttons, axes:[0, 0]};
     Object.defineProperty(navigator, "getGamepads", {configurable:true, value:() => [pad]});
@@ -305,8 +353,59 @@
     if (launches.length !== 1 || launches[0][0] !== "Smoke2" || launches[0][1] !== "--game")
       throw Error("O botão A deve abrir uma vez o jogo selecionado");
     buttons[0].pressed = false;
-    buttons[1].pressed = true;
-    await wait(() => !document.querySelector(".big-picture"), "Botão B");
+    await new Promise((r) => setTimeout(r, 100));
+
+    // The second gamepad must work while the first is connected and idle.
+    // It was previously ignored because the polling loop broke at pad 0.
+    const secondButtons = Array.from({length: 16}, () => ({pressed:false}));
+    const secondPad = {
+      id:"DualSense Wireless Controller", mapping:"standard",
+      connected:true, buttons:secondButtons, axes:[0,0],
+    };
+    Object.defineProperty(navigator, "getGamepads", {configurable:true, value:() => [pad, secondPad]});
+    secondButtons[9].pressed = true;
+    await wait(() => !document.querySelector(".bp-settings").hidden, "Segundo controle abre configurações");
+    secondButtons[9].pressed = false;
+    await new Promise((r) => setTimeout(r, 120));
+    if (!document.querySelector(".bp-controls img[src*='ps_x.png']"))
+      throw Error("Glifos não acompanharam o segundo controle PlayStation");
+    const toggles = [
+      ["view", "cartridge"], ["background", "solid"],
+      ["showTitle", false], ["showPlatform", false],
+    ];
+    for (const [key] of toggles) {
+      const option = document.querySelector('.bp-setting[data-setting="' + key + '"]');
+      if (!option) throw Error("Opção do Big Picture ausente: " + key);
+      option.click();
+    }
+    await wait(() => document.querySelector(".big-picture").classList.contains("bp-cartridges"),
+      "Visualização de cartucho");
+    // Serialized writes must persist beyond the current fullscreen session.
+    await wait(() => document.querySelector(".bp-settings-list"), "Configurações visíveis");
+    let savedBp = await api.BigPictureOptions();
+    for (let retry = 0; retry < 30 && savedBp.view !== "cartridge"; retry++) {
+      await new Promise((r) => setTimeout(r, 100));
+      savedBp = await api.BigPictureOptions();
+    }
+    if (savedBp.view !== "cartridge" || savedBp.background !== "solid" ||
+        savedBp.showTitle !== false || savedBp.showPlatform !== false)
+      throw Error("Preferências do Big Picture não persistiram: " + JSON.stringify(savedBp));
+    secondButtons[1].pressed = true;
+    await wait(() => document.querySelector(".bp-settings").hidden,
+      "Botão B do segundo controle fecha apenas configurações");
+    secondButtons[1].pressed = false;
+    await new Promise((r) => setTimeout(r, 120));
+    secondButtons[1].pressed = true;
+    await wait(() => !document.querySelector(".big-picture"), "Botão B fecha Big Picture");
+    secondButtons[1].pressed = false;
+    await probe.Progress("bigpicture-reopen");
+    click("Big Picture");
+    await wait(() => document.querySelector(".big-picture")?.classList.contains("bp-cartridges"),
+      "Configuração persistida ao reabrir");
+    if (!document.querySelector(".big-picture").classList.contains("bp-hide-title"))
+      throw Error("Big Picture reabriu com títulos visíveis");
+    document.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape",bubbles:true,cancelable:true}));
+    await wait(() => !document.querySelector(".big-picture"), "Fechar modo Big Picture");
     api.Run = originalRun;
     await probe.Progress("all-passed");
     await probe.Done("");

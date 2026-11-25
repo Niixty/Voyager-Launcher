@@ -433,3 +433,40 @@ quatro valores, sem alterar as posições nem as mensagens das etapas.
 Como os campos são opcionais, layouts antigos preservam a aparência
 anterior até que sejam personalizados. As opções de salvar o layout
 para o jogo, como padrão futuro ou como padrão global continuam válidas.
+
+
+### Big Picture com dois controles, personalização e galeria sem mistura
+
+O modo **Big Picture** reconhece ações de todos os gamepads conectados,
+incluindo dois controles Xbox ou PlayStation ao mesmo tempo. Cada
+controle mantém o próprio estado de botões, evitando que o primeiro
+controle parado impeça o uso do segundo. A interface acompanha o
+controle usado nos ícones de A/B e botões PlayStation. **Start/Menu**
+abre as Configurações, A seleciona, B retorna e o direcional/analógico
+navega; teclado e mouse continuam disponíveis.
+
+No menu Configurações do Big Picture é possível alternar entre
+**Capas Grid** e **Cartuchos** (com fallback Grid), ativar o **Hero do
+jogo selecionado como fundo**, controlar desfoque e escurecimento,
+ocultar títulos e plataformas. As escolhas são persistidas no
+`app/bigpicture.json` ou no diretório raiz de instalação; o arquivo
+não entra no Git e não interfere com a sincronização da main.
+
+A galeria do SteamGridDB foi protegida contra respostas fora de ordem:
+ao trocar o jogo da busca, a galeria anterior é apagada, uma nova
+requisição pode começar imediatamente e resultados atrasados do jogo
+anterior não são inseridos. No gerenciador clássico, novos cadastros
+recebem o próximo ID `NovoJogo`, `NovoJogo2`, etc. disponível, e
+salvar um jogo novo com um ID já existente é recusado para evitar
+sobrescrita de configuração ou imagens.
+
+### Recuperação automática de publicação de releases
+
+Se o GitHub devolver erro temporário (como HTTP 500) na publicação de
+uma versão compilada e testada, o workflow tenta recuperar a mesma
+release automaticamente usando a CLI GitHub, incluindo os arquivos
+`VoyagerLauncher.exe`, `VoyagerUpdater.exe` e `SHA256SUMS.txt`.
+Não altera a segurança do atualizador: uma release só pode ser aplicada
+quando os executáveis estão disponíveis e validados com SHA-256. A
+sincronização de código por Git permanece independente da atualização
+do EXE distribuído pelo GitHub Releases.

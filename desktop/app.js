@@ -724,7 +724,7 @@ async function steamGridBrowser(g, kind) {
   document.body.append(dialog);
   dialog.showModal();
   const token = {cancelled:false};
-  dialog.addEventListener("close", () => { token.cancelled = true; });
+  dialog.addEventListener("close", () => { token.cancelled = true; generation++; });
   const title = el("h2", "SteamGridDB · " + (kind === "hero" ? "Heroes" : "Grids"));
   const info = el("p", "Buscando com o nome salvo do jogo: " + (g.Config.title || "(não definido)"));
   const status = el("p", "", "muted");
@@ -735,7 +735,10 @@ async function steamGridBrowser(g, kind) {
   more.hidden = true;
   controls.append(more);
   shell.append(title, info, gamesBox, status, gallery, controls);
-  let gameID = 0, currentPage = 0, loading = false;
+  // Each selection has its own request generation: an old request cannot
+  // append images or change the load-more button after the selected game
+  // changes. The new selection can load while the old request is pending.
+  let gameID = 0, currentPage = 0, generation = 0, loadingGeneration = -1;
   const showError = (error) => {
     status.textContent = String(error);
     if (/chave|API|401|403/i.test(String(error))) {
@@ -750,13 +753,16 @@ async function steamGridBrowser(g, kind) {
     }
   };
   async function loadImages() {
-    if (loading || !gameID || token.cancelled) return;
-    loading = true;
+    if (!gameID || token.cancelled || loadingGeneration === generation) return;
+    const requestGeneration = generation;
+    const selectedGameID = gameID;
+    const requestedPage = currentPage;
+    loadingGeneration = requestGeneration;
     more.disabled = true;
-    status.textContent = "Buscando imagens (página " + (currentPage + 1) + ")…";
+    status.textContent = "Buscando imagens (página " + (requestedPage + 1) + ")…";
     try {
-      const result = await api.SteamGridImages(gameID, kind, currentPage);
-      if (token.cancelled) return;
+      const result = await api.SteamGridImages(selectedGameID, kind, requestedPage);
+      if (token.cancelled || requestGeneration !== generation || gameID !== selectedGameID) return;
       for (const artwork of result.items || []) {
         const item = el("button", null, "sgdb-item");
         item.type = "button";
@@ -788,10 +794,12 @@ async function steamGridBrowser(g, kind) {
         ? gallery.childElementCount + " imagens carregadas. Escolha a que preferir."
         : "Nenhuma imagem encontrada para este jogo.";
     } catch (e) {
-      if (!token.cancelled) showError(e);
+      if (!token.cancelled && requestGeneration === generation) showError(e);
     } finally {
-      loading = false;
-      more.disabled = false;
+      if (loadingGeneration === requestGeneration) {
+        loadingGeneration = -1;
+        more.disabled = false;
+      }
     }
   }
   try {
@@ -811,10 +819,13 @@ async function steamGridBrowser(g, kind) {
     const exact = gamesFound.find((x) => normalized(x.name) === normalized(g.Config.title));
     if (exact) chooser.value = String(exact.id);
     chooser.onchange = () => {
+      generation++; // retire outstanding results from the previous game
       gameID = Number(chooser.value);
       currentPage = 0;
       gallery.replaceChildren();
       more.hidden = true;
+      more.disabled = false;
+      status.textContent = "Carregando imagens do jogo selecionado…";
       safe(loadImages);
     };
     gamesBox.append(field("Jogo encontrado na SteamGridDB", chooser));
