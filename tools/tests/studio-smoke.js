@@ -342,7 +342,7 @@
     // The top-right bar shows local time and translucent glass actions.
     const headerActions = document.querySelector(".bp-header-actions");
     const localTime = headerActions?.querySelector(".bp-clock")?.textContent || "";
-    if (!/^\\d{2}:\\d{2}$/.test(localTime) ||
+    if (!/^\d{2}:\d{2}$/.test(localTime) ||
         headerActions?.querySelector(".bp-clock-divider")?.textContent !== "|" ||
         headerActions?.querySelector(".bp-family"))
       throw Error("Topo do Big Picture deveria mostrar HH:mm | Configurações, Sair");
