@@ -5,6 +5,7 @@ async function editor(g) {
   if (page !== serial) return;
   let doc = structuredClone(initial),
     sel = "cartridge",
+    selected = new Set(["cartridge"]),
     snap = true,
     grid = true,
     zoom = 1,
@@ -21,7 +22,6 @@ async function editor(g) {
       platform: "Plataforma",
       title: "Título",
       description: "Descrição",
-      heading: "Mensagem",
       percentage: "Porcentagem",
       progress: "Barra antiga (desativada)",
       phase: "Etapa",
@@ -32,6 +32,28 @@ async function editor(g) {
     props = el("section", null, "panel"),
     layer = el("select");
   const pick = () => doc.elements.find((x) => x.id === sel);
+  const selectedNodes = () => doc.elements.filter((x) => selected.has(x.id));
+  // Align the selection's combined bounding box, preserving internal offsets.
+  // No Math.round here: odd-size elements require half-pixel origins to
+  // place their true center at 800 x 450 in a 1600 x 900 canvas.
+  function positionSelection(horizontal, vertical) {
+    const nodes = selectedNodes();
+    if (!nodes.length) return;
+    const x0 = Math.min(...nodes.map((n) => n.x));
+    const x1 = Math.max(...nodes.map((n) => n.x + n.width));
+    const y0 = Math.min(...nodes.map((n) => n.y));
+    const y1 = Math.max(...nodes.map((n) => n.y + n.height));
+    const dx = horizontal === null ? 0 : (1600 - (x1 - x0)) * horizontal - x0;
+    const dy = vertical === null ? 0 : (900 - (y1 - y0)) * vertical - y0;
+    if (!dx && !dy) return;
+    remember();
+    for (const node of nodes) {
+      node.x += dx;
+      node.y += dy;
+      bounds(node);
+    }
+    refresh();
+  }
   function remember() {
     undo.push(structuredClone(doc));
     if (undo.length > 80) undo.shift();
@@ -159,7 +181,7 @@ async function editor(g) {
     }
     for (const n of doc.elements) {
       if (!n.visible || n.id === "progress") continue;
-      const box = el("div", null, "node" + (n.id === sel ? " selected" : ""));
+      const box = el("div", null, "node" + (selected.has(n.id) ? " selected" : ""));
       box.title = names[n.id];
       box.dataset.id = n.id;
       position(box, n);
@@ -186,7 +208,24 @@ async function editor(g) {
     if (!box) return;
     e.preventDefault();
     stage.focus();
-    sel = box.dataset.id;
+    const id = box.dataset.id;
+    // Shift + click toggles elements without starting an accidental drag.
+    if (e.shiftKey) {
+      if (selected.has(id) && selected.size > 1) {
+        selected.delete(id);
+        if (sel === id) sel = [...selected][selected.size - 1];
+      } else {
+        selected.add(id);
+        sel = id;
+      }
+      outlines();
+      properties();
+      return;
+    }
+    // Clicking a member of a multi-selection keeps the group together;
+    // clicking outside it selects only the new element.
+    if (!selected.has(id)) selected = new Set([id]);
+    sel = id;
     const r = stage.getBoundingClientRect();
     drag = {
       id: e.pointerId,
@@ -195,6 +234,7 @@ async function editor(g) {
       w: r.width,
       h: r.height,
       original: { ...pick() },
+      originals: selectedNodes().map((n) => ({ id: n.id, x: n.x, y: n.y })),
       corner: e.target.dataset.corner,
       moved: false,
     };
@@ -215,8 +255,16 @@ async function editor(g) {
       n = pick(),
       quant = (v) => (snap ? Math.round(v / 10) * 10 : Math.round(v));
     if (!drag.corner) {
-      n.x = quant(o.x + dx);
-      n.y = quant(o.y + dy);
+      // Snap the common delta, not each original coordinate. This keeps
+      // selected elements' exact relative spacing and center positions.
+      const shiftX = quant(dx), shiftY = quant(dy);
+      for (const entry of drag.originals) {
+        const target = doc.elements.find((item) => item.id === entry.id);
+        if (!target) continue;
+        target.x = entry.x + shiftX;
+        target.y = entry.y + shiftY;
+        bounds(target);
+      }
     } else {
       const [right, bottom] = drag.corner.split(",").map(Number);
       const x = right ? o.x : limit(quant(o.x + dx), -3200, o.x + o.width - 16),
@@ -227,7 +275,10 @@ async function editor(g) {
       n.y = y;
     }
     bounds(n);
-    position(stage.querySelector(".selected"), n);
+    stage.querySelectorAll(".node.selected").forEach((box) => {
+      const element = doc.elements.find((item) => item.id === box.dataset.id);
+      if (element) position(box, element);
+    });
     requestFrame();
   };
   stage.onpointerup = stage.onpointercancel = () => {
@@ -251,12 +302,16 @@ async function editor(g) {
     layer.value = sel;
     layer.onchange = () => {
       sel = layer.value;
+      selected = new Set([sel]);
       properties();
       outlines();
     };
     const n = pick(),
       fields = el("div", null, "fields");
     props.append(field("Camada selecionada", layer), fields);
+    props.append(el("small", selected.size > 1
+      ? selected.size + " camadas selecionadas — arraste qualquer uma para mover o grupo. Shift + clique para adicionar/remover."
+      : "Shift + clique em outras camadas para mover várias juntas."));
     props.append(el("small", "Posicionamento livre: X e Y de -3200 a +3200. Valores negativos, como Y = -50, colocam parte do elemento fora da tela."));
     for (const [k, label] of [
       ["x", "X"],
@@ -266,11 +321,11 @@ async function editor(g) {
       ["fontSize", "Fonte"],
     ]) {
       if (k === "fontSize" && !n.fontSize) continue;
-      const i = inp(Math.round(n[k]), "number");
+      const i = inp(n[k], "number");
       if (k === "x" || k === "y") {
         i.min = -3200;
         i.max = 3200;
-        i.step = 1;
+        i.step = "any";
       }
       i.onchange = () =>
         edit((obj) => {
@@ -349,13 +404,13 @@ async function editor(g) {
       ],
       "",
     );
-    align.onchange = () =>
-      edit((o) => {
-        const x = { l: 0, cx: (1600 - o.width) / 2, r: 1600 - o.width },
-          y = { t: 0, cy: (900 - o.height) / 2, b: 900 - o.height };
-        if (align.value in x) o.x = x[align.value];
-        if (align.value in y) o.y = y[align.value];
-      });
+    align.onchange = () => {
+      const positions = {
+        l: [0, null], cx: [0.5, null], r: [1, null],
+        t: [null, 0], cy: [null, 0.5], b: [null, 1],
+      };
+      if (positions[align.value]) positionSelection(...positions[align.value]);
+    };
     tools.append(
       align,
       btn("Restaurar elemento", () =>
@@ -381,19 +436,20 @@ async function editor(g) {
       ["↓", "Inferior central", 0.5, 1],
       ["↘", "Inferior direito", 1, 1],
     ]) {
-      const button = btn(label, () =>
-        edit((o) => {
-          o.x = Math.round((1600 - o.width) * horizontal);
-          o.y = Math.round((900 - o.height) * vertical);
-        }),
-      );
+      const button = btn(label, () => positionSelection(horizontal, vertical));
       button.title = "Posicionar: " + name;
       button.setAttribute("aria-label", "Posicionar: " + name);
       anchors.append(button);
     }
     const heading = el("div", "POSIÇÃO RÁPIDA NA TELA", "alignHeading");
-    const hint = el("small", "Move o elemento inteiro. Para alinhar somente o texto, use os campos acima.");
-    props.append(add(el("div", null, "alignQuick"), heading, hint, anchors));
+    const hint = el("small", "Alinha a caixa ou o conjunto selecionado, sem alterar o espaçamento interno. O centro é exato, mesmo com dimensões ímpares.");
+    const axisButtons = el("div", null, "axisAlign");
+    axisButtons.append(
+      btn("Centralizar só horizontal", () => positionSelection(0.5, null)),
+      btn("Centralizar só vertical", () => positionSelection(null, 0.5)),
+      btn("Centralizar nos dois eixos", () => positionSelection(0.5, 0.5)),
+    );
+    props.append(add(el("div", null, "alignQuick"), heading, hint, axisButtons, anchors));
   }
   let frameTimer;
   function requestFrame() {
@@ -420,6 +476,10 @@ async function editor(g) {
     }
   }
   function refresh() {
+    const ids = new Set(doc.elements.map((node) => node.id));
+    selected = new Set([...selected].filter((id) => ids.has(id)));
+    if (!selected.size) selected.add(doc.elements[0]?.id || "cartridge");
+    if (!selected.has(sel)) sel = [...selected][0];
     outlines();
     properties();
     requestFrame();
@@ -437,10 +497,13 @@ async function editor(g) {
     } else if (e.key.startsWith("Arrow")) {
       e.preventDefault();
       const v = e.shiftKey ? 10 : 1;
-      edit((n) => {
+      remember();
+      for (const n of selectedNodes()) {
         n.x += { ArrowLeft: -v, ArrowRight: v }[e.key] || 0;
         n.y += { ArrowUp: -v, ArrowDown: v }[e.key] || 0;
-      });
+        bounds(n);
+      }
+      refresh();
     }
   }
   main.onkeydown = keys;
@@ -516,7 +579,7 @@ async function editor(g) {
         "primary",
       ),
       btn("Restaurar layout", () => {
-        if (confirm("Restaurar os oito elementos de fábrica?")) {
+        if (confirm("Restaurar os sete elementos de fábrica?")) {
           remember();
           doc = structuredClone(factory);
           refresh();

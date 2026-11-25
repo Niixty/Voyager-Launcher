@@ -23,7 +23,7 @@ const (
     Platform = "platform"
     Title = "title"
     Description = "description"
-    Heading = "heading"
+    Heading = "heading" // ID legado: removido do editor e ignorado ao carregar layouts antigos
     Percentage = "percentage"
     Progress = "progress"
     Phase = "phase"
@@ -55,7 +55,6 @@ func Default() Layout {
         {ID:Platform,X:526,Y:243,W:810,H:33,FontSize:15,Visible:true,Color:"auto"},
         {ID:Title,X:526,Y:300,W:845,H:120,FontSize:43,Visible:true,Color:"white"},
         {ID:Description,X:526,Y:465,W:790,H:85,FontSize:19,Visible:true,Color:"muted"},
-        {ID:Heading,X:526,Y:574,W:615,H:43,FontSize:25,Visible:true,Color:"white"},
         {ID:Percentage,X:1277,Y:580,W:125,H:38,FontSize:21,Visible:true,Color:"white"},
         {ID:Progress,X:526,Y:634,W:865,H:6,Visible:false},
         {ID:Phase,X:526,Y:651,W:865,H:40,FontSize:15,Visible:true,Color:"muted"},
@@ -64,7 +63,7 @@ func Default() Layout {
 
 var labels=map[string]string{
     Cartridge:"Cartucho",Platform:"Plataforma",Title:"Título",Description:"Descrição",
-    Heading:"Status de carregamento",Percentage:"Porcentagem",Progress:"Barra antiga (desativada)",Phase:"Etapa atual",
+    Percentage:"Porcentagem",Progress:"Barra antiga (desativada)",Phase:"Etapa atual",
 }
 func Name(id string)string {if name,ok:=labels[id];ok{return name};return id}
 func ValidID(id string)bool {_,ok:=labels[id];return ok}

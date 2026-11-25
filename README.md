@@ -325,3 +325,33 @@ da animação final é reiniciado para evitar saltos ao voltar a 95%.
 A mesma suavização foi aplicada à prévia animada no editor WebView2: o
 elemento visual não é recriado a cada mudança de porcentagem, e as
 transformações são interpoladas continuamente com `requestAnimationFrame`.
+
+
+### Editor de loading: seleção múltipla e centralização exata
+
+**Shift + clique** sobre as caixas de Cartucho, Título, Descrição,
+Plataforma, Porcentagem e Etapa seleciona várias camadas. Arrastar
+qualquer uma das camadas selecionadas move o conjunto, sem alterar as
+distâncias relativas; Shift + clique novamente remove uma camada da
+seleção. As teclas de seta também movem o grupo (Shift + seta: 10 px).
+Desfazer/Refazer registram o movimento em uma única etapa.
+
+A seção **POSIÇÃO RÁPIDA NA TELA** oferece centralizar somente no
+eixo horizontal, somente no vertical ou em ambos. Os nove atalhos de
+ancoragem também funcionam com grupos: a caixa delimitadora do conjunto
+é posicionada sem distorcer os elementos internos. A centralização usa
+a dimensão efetiva da caixa, com precisão de **meio pixel** quando a
+largura/altura é ímpar (por exemplo, um Cartucho de 305 px fica em
+X = 647,5, centralizado exatamente em 800).
+
+A antiga camada **Mensagem** (ID legado `heading`) foi removida
+permanentemente dos layouts e do render; ao abrir um layout antigo
+ela é descartada, mantendo todas as demais posições e preferências.
+
+No modo **Testar loading (10 s)**, a etapa não anuncia mais o modo
+de simulação. Exibe as mesmas mensagens de inicialização comuns,
+alternando entre: **Verificando arquivos do jogo**,
+**Assoprando cartucho...**, **Trocando bateria...**,
+**Aguardando a janela do jogo...**, **Janela do jogo detectada**,
+**Confirmando imagem do jogo...**, **Finalizando carregamento...**
+e **Jogo pronto**. A prévia nunca inicia o jogo de verdade.

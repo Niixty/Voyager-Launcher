@@ -116,6 +116,58 @@
     }
     if (titleSaved.x !== -50 || saved.elements.find(n => n.id === "cartridge").y !== -50)
       throw Error("Coordenadas negativas foram perdidas ao salvar o layout");
+    // Shift multi-selection must move all selected layers as a group.
+    if ([...layer.options].some((option) => option.value === "heading"))
+      throw Error("Camada Mensagem ainda aparece no editor");
+    const stage = document.querySelector(".stage");
+    const titleNode = stage.querySelector('.node[data-id="title"]');
+    if (!titleNode) throw Error("Camada Título ausente");
+    titleNode.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true, cancelable: true, pointerId: 99, shiftKey: true,
+    }));
+    if (stage.querySelectorAll(".node.selected").length !== 2)
+      throw Error("Shift + clique não selecionou duas camadas");
+    const rect = (id) => {
+      const node = stage.querySelector('.node[data-id="' + id + '"]');
+      return {
+        x: parseFloat(node.style.left) * 16,
+        y: parseFloat(node.style.top) * 9,
+        w: parseFloat(node.style.width) * 16,
+        h: parseFloat(node.style.height) * 9,
+      };
+    };
+    const originalTitle = rect("title");
+    const originalCartridge = rect("cartridge");
+    const tolerance = 0.005;
+    const centered = (axis, span) => {
+      const a = rect("title"), b = rect("cartridge");
+      const start = Math.min(a[axis], b[axis]);
+      const end = Math.max(a[axis] + a[span], b[axis] + b[span]);
+      return (start + end) / 2;
+    };
+    click("Centralizar só horizontal");
+    if (Math.abs(centered("x", "w") - 800) > tolerance)
+      throw Error("Centralização horizontal do grupo está incorreta");
+    if (Math.abs(rect("title").y - originalTitle.y) > tolerance ||
+        Math.abs(rect("cartridge").y - originalCartridge.y) > tolerance)
+      throw Error("Centralização horizontal alterou o eixo Y");
+    if (Math.abs((rect("cartridge").x - rect("title").x) -
+                 (originalCartridge.x - originalTitle.x)) > tolerance)
+      throw Error("Seleção múltipla perdeu o espaçamento entre camadas");
+    const positionAfterHorizontal = rect("title").x;
+    click("Centralizar só vertical");
+    if (Math.abs(centered("y", "h") - 450) > tolerance)
+      throw Error("Centralização vertical do grupo está incorreta");
+    if (Math.abs(rect("title").x - positionAfterHorizontal) > tolerance)
+      throw Error("Centralização vertical alterou o eixo X");
+    // A single odd-width cartridge needs a true half-pixel center.
+    layer.value = "cartridge";
+    layer.dispatchEvent(new Event("change", { bubbles: true }));
+    click("Centralizar só horizontal");
+    const single = rect("cartridge");
+    if (Math.abs(single.x + single.w / 2 - 800) > tolerance)
+      throw Error("Camada ímpar não centralizou com precisão");
+
     await probe.Capture("editor");
     click("Configurações");
     await wait(() => heading("Configurações"), "Configurações");

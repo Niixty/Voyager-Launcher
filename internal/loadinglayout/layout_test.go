@@ -8,7 +8,7 @@ import (
 
 func TestDefaults(t *testing.T){
   d:=Default()
-  if len(d.Elements)!=8 {t.Fatalf("expected 8 nodes, got %d",len(d.Elements))}
+  if len(d.Elements)!=7 {t.Fatalf("expected 7 nodes, got %d",len(d.Elements))}
   for _,node:=range d.Elements{
    if (node.ID!=Progress && !node.Visible) || node.W<=0 || node.X+node.W>1600 || node.Y+node.H>900 {t.Fatal(node)}
   }
@@ -75,7 +75,7 @@ func TestUnknownElementsIgnored(t *testing.T){
  l:=Default()
  l.Elements=append(l.Elements,Element{ID:"bad",X:10,Y:10,W:100,H:100,Visible:true})
  l.Elements=append(l.Elements,l.Elements[0])
- if len(l.Normalize().Elements)!=8 {t.Fatal("unknown or duplicate not discarded")}
+ if len(l.Normalize().Elements)!=7 {t.Fatal("unknown or duplicate not discarded")}
 }
 
 
@@ -108,4 +108,30 @@ func TestPositionSafetyLimits(t *testing.T){
  l.Find(Title).Y=90000
  normalized:=l.Normalize()
  if normalized.Find(Cartridge).X!=PositionMin || normalized.Find(Title).Y!=PositionMax {t.Fatal(normalized)}
+}
+
+func TestLegacyHeadingRemovedWhilePreservingOtherNodes(t *testing.T) {
+    layout:=Default()
+    layout.Elements=append(layout.Elements,Element{ID:Heading,X:500,Y:400,W:300,H:50,Visible:true,FontSize:26})
+    if normalized:=layout.Normalize();normalized.Find(Heading)!=nil || len(normalized.Elements)!=7 {
+        t.Fatalf("a camada Mensagem não pode aparecer após normalização: %+v",normalized)
+    }
+    path:=filepath.Join(t.TempDir(),"legacy_loading.json")
+    if err:=Save(path,layout);err!=nil{t.Fatal(err)}
+    restored,err:=Load(path)
+    if err!=nil{t.Fatal(err)}
+    if restored.Find(Heading)!=nil || len(restored.Elements)!=7 {t.Fatal("camada legada reapareceu")}
+}
+func TestHalfPixelCenterCoordinatesSurviveRoundtrip(t *testing.T){
+    layout:=Default()
+    cartridge:=layout.Find(Cartridge)
+    cartridge.X=(VirtualWidth-cartridge.W)/2
+    cartridge.Y=(VirtualHeight-cartridge.H)/2
+    if cartridge.X!=647.5 || cartridge.Y!=244.5 {t.Fatalf("centro esperado 647.5/244.5, obtido %.2f/%.2f",cartridge.X,cartridge.Y)}
+    path:=filepath.Join(t.TempDir(),"center.json")
+    if err:=Save(path,layout);err!=nil{t.Fatal(err)}
+    loaded,err:=Load(path)
+    if err!=nil{t.Fatal(err)}
+    got:=loaded.Find(Cartridge)
+    if got==nil || got.X!=647.5 || got.Y!=244.5 {t.Fatalf("centro perdeu precisão: %+v",got)}
 }

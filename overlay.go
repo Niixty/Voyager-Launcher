@@ -22,6 +22,7 @@ import (
 	"voyager/native/internal/heroaccent"
 	ll "voyager/native/internal/loadinglayout"
     "voyager/native/internal/loadingmotion"
+    lp "voyager/native/internal/loadingprogress"
 )
 
 // Native Win32 overlay. No PowerShell, Windows Forms, browser or .NET runtime.
@@ -197,9 +198,7 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
             value=string(description)
             themeColor=overlayTheme.Color("description")
         case ll.Heading:
-            value=overlayTheme.LoadingTitle
-            themeColor=overlayTheme.Color("heading")
-            if failed{value=overlayTheme.FailureTitle;themeColor=overlayTheme.Color("headingError")}
+            continue // Camada Mensagem removida (incluindo layouts legados).
         case ll.Percentage:
             if !appPrefs.ShowPercentage{continue}
             value=fmt.Sprintf("%d%%",percent)
@@ -215,7 +214,7 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
         case "muted":themeColor=overlayTheme.Color("status")
         case "hero":themeColor=heroColor
         }
-        if failed && (n.ID==ll.Heading || n.ID==ll.Phase) {
+        if failed && n.ID==ll.Phase {
             themeColor=overlayTheme.Color("headingError")
         }
         p.textAligned(xx,yy,ww,hh,value,n.FontSize*float32(s),palette(themeColor),bold,n.TextAlign,n.VerticalAlign)
@@ -590,10 +589,10 @@ func (o *overlayState) run() error {
 	o.started = time.Now()
 	o.percent = 0
 	if o.testLoading {
-		o.phase = "Simulando loading (sem iniciar o jogo)"
+		o.phase = lp.Stage(0)
 	} else {
 		o.percent = 5
-		o.phase = "Verificando arquivos do jogo"
+		o.phase = lp.Stage(5)
 		o.baseline = snapshotPIDs()
 		o.invalidateAll()
 		if err := o.startGame(); err != nil {
@@ -888,7 +887,9 @@ func (o *overlayState) tick() {
         if progress!=o.percent {
             o.percent=progress
             if progress==100 && o.completedAt.IsZero(){o.completedAt=now}
-            o.invalidateProgress()
+            phase:=lp.Stage(progress)
+            if phase!=o.phase {o.phase=phase;o.invalidateAll()
+            }else{o.invalidateProgress()}
         }
         return
     }
@@ -941,7 +942,7 @@ func (o *overlayState) tick() {
 			o.targetHWND = candidate
 			o.ready = now
 			o.percent = 70
-			o.phase = "Janela do jogo detectada"
+			o.phase = lp.Stage(70)
 			o.invalidateAll()
 		}
 		age := now.Sub(o.ready)
@@ -951,7 +952,7 @@ func (o *overlayState) tick() {
 		if hold < time.Second { hold = time.Second }
 		if age >= hold {
 			o.percent = 100
-            o.phase="Jogo pronto"
+            o.phase=lp.Stage(100)
             o.completedAt=now
             o.invalidateAll()
             call(pSetForegroundWindow,candidate)
@@ -965,12 +966,9 @@ func (o *overlayState) tick() {
             if raw>=95 {v=95}
 			if v != o.percent {
                 o.percent=v
-                if o.phase!="Confirmando imagem do jogo" {
-                    o.phase="Confirmando imagem do jogo"
-                    o.invalidateAll()
-                } else {
-                    o.invalidateProgress()
-                }
+                phase:=lp.Stage(v)
+                if phase!=o.phase {o.phase=phase;o.invalidateAll()
+                }else{o.invalidateProgress()}
             }
 		}
 	} else {
@@ -978,12 +976,12 @@ func (o *overlayState) tick() {
 			o.targetHWND = 0
 			o.ready = time.Time{}
 			o.percent = 55
-			o.phase = "Aguardando a janela do jogo"
+			o.phase = lp.Stage(55)
 			o.invalidateAll()
 		}
 		if o.percent < 55 {
 			o.percent = 55
-			o.phase = "Aguardando a janela do jogo"
+			o.phase = lp.Stage(55)
 			o.invalidateAll()
 		}
 	}
