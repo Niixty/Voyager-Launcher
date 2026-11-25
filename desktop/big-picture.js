@@ -9,7 +9,7 @@ async function openBigPicture() {
     view: "grid", background: "hero", buttonStyle: "auto", showTitle: true,
     showPlatform: true, blurBackground: true, dim: 65,
     scrollDirection: "vertical", columns: 4, rows: 2, iconSize: 100,
-    defaultBackgroundHeroColor: false,
+    defaultBackgroundHeroColor: false, cartridgeSpacing: 24,
   };
   const prefs = { ...defaults, ...(await api.BigPictureOptions()) };
   if (!["auto", "xbox", "playstation"].includes(prefs.buttonStyle)) prefs.buttonStyle = "auto";
@@ -17,7 +17,9 @@ async function openBigPicture() {
   prefs.columns = Number.isInteger(prefs.columns) ? Math.max(1, Math.min(8, prefs.columns)) : 4;
   prefs.rows = Number.isInteger(prefs.rows) ? Math.max(1, Math.min(4, prefs.rows)) : 2;
   prefs.iconSize = Number.isFinite(prefs.iconSize)
-    ? Math.max(60, Math.min(140, Math.round(prefs.iconSize / 10) * 10)) : 100;
+    ? Math.max(80, Math.min(180, Math.round(prefs.iconSize / 10) * 10)) : 100;
+  prefs.cartridgeSpacing = Number.isFinite(prefs.cartridgeSpacing)
+    ? Math.max(0, Math.min(48, Math.round(prefs.cartridgeSpacing / 4) * 4)) : 24;
   const iconPack = window.VoyagerGamepadIcons;
   const previous = document.activeElement;
   const panel = el("section", null, "big-picture");
@@ -56,6 +58,17 @@ async function openBigPicture() {
         <path class="bp-wave-path" fill="url(#bp-wave-blue)" d="M-180 855 C240 715 410 975 820 785 S1450 645 1790 820 L1790 1040 L-180 1040 Z"/>
       </g>
     </svg>`;
+  // Give each scene its own gradient IDs; two complete scenes crossfade as
+  // one composited image so bottom waves never lag the background tint.
+  const waveMarkup = waves.innerHTML;
+  const waveScenes = [0, 1].map(slot => {
+    const scene = el("div", null, "bp-wave-scene");
+    scene.innerHTML = waveMarkup.replace(/bp-wave-(blue|cyan|violet)/g,
+      (_match, name) => `bp-wave-${name}-${slot}`);
+    return scene;
+  });
+  waveScenes[0].classList.add("is-active");
+  waves.replaceChildren(...waveScenes);
   const heroLayers = [
     el("div", null, "bp-hero-layer"),
     el("div", null, "bp-hero-layer"),
@@ -106,6 +119,8 @@ async function openBigPicture() {
   let currentFamily = "", renderedButtonStyle = "", lastDetectedFamily = "xbox", activePadIndex = null, saveChain = Promise.resolve();
   const accentCache = new Map();
   let accentRequestSerial = 0;
+  const accentRequests = new Map();
+  let heroAccent = "", waveColor = "", waveSlot = 0;
   const heldByPad = new Map();
   let heroSlot = 0, heroRequestedId = "", heroSerial = 0;
 
@@ -142,11 +157,13 @@ async function openBigPicture() {
     ["rows", "Linhas visíveis", () => String(prefs.rows),
       () => { prefs.rows = prefs.rows >= 4 ? 1 : prefs.rows + 1; }],
     ["iconSize", "Tamanho dos ícones", () => prefs.iconSize + "%",
-      () => { prefs.iconSize = prefs.iconSize >= 140 ? 60 : prefs.iconSize + 10; }],
+      () => { prefs.iconSize = prefs.iconSize >= 180 ? 80 : prefs.iconSize + 10; }],
+    ["cartridgeSpacing", "Espaçamento dos cartuchos", () => prefs.cartridgeSpacing + " px",
+      () => { prefs.cartridgeSpacing = prefs.cartridgeSpacing >= 48 ? 0 : prefs.cartridgeSpacing + 4; }],
     ["background", "Fundo", () => prefs.background === "hero" ? "Hero do jogo selecionado" : "Fundo padrão",
       () => { prefs.background = prefs.background === "hero" ? "solid" : "hero"; }],
     ["defaultBackgroundHeroColor", "Cor do fundo padrão",
-      () => prefs.defaultBackgroundHeroColor ? "Seguir cor da Hero" : "Azul original",
+      () => prefs.defaultBackgroundHeroColor ? "Seguir cor da Hero" : "Tema",
       () => { prefs.defaultBackgroundHeroColor = !prefs.defaultBackgroundHeroColor; }],
     ["blurBackground", "Desfoque do fundo", () => prefs.blurBackground ? "Ativado" : "Desativado",
       () => { prefs.blurBackground = !prefs.blurBackground; }],
@@ -213,8 +230,12 @@ async function openBigPicture() {
     panel.classList.toggle("bp-scroll-horizontal", prefs.scrollDirection === "horizontal");
     grid.style.setProperty("--bp-columns", String(prefs.columns));
     grid.style.setProperty("--bp-rows", String(prefs.rows));
-    grid.style.setProperty("--bp-icon-scale", String(prefs.iconSize / 100));
-    grid.style.setProperty("--bp-selected-scale", String(prefs.iconSize / 100 * 1.055));
+    // The new displayed 100% equals the previous release's 80%.
+    // Applies to both cover types and the subtly enlarged selected cartridge.
+    const effectiveScale = prefs.iconSize / 100 * 0.8;
+    grid.style.setProperty("--bp-icon-scale", String(Number(effectiveScale.toFixed(3))));
+    grid.style.setProperty("--bp-selected-scale", String(Number((effectiveScale * 1.055).toFixed(3))));
+    grid.style.setProperty("--bp-cartridge-spacing", prefs.cartridgeSpacing + "px");
     panel.classList.toggle("bp-hide-title", !prefs.showTitle);
     panel.classList.toggle("bp-hide-platform", !prefs.showPlatform);
     panel.classList.toggle("bp-blur-hero", prefs.blurBackground);
@@ -243,7 +264,7 @@ async function openBigPicture() {
       cards[selected].scrollIntoView({ block: "nearest", inline: "nearest" });
     }
     refreshBackground();
-    refreshWaveColor(panel.style.getPropertyValue("--bp-glow-color") || "#ACB7C1");
+    refreshWaveColor(heroAccent || themeAccent());
     refreshGlyphs(lastDetectedFamily);
   }
   function refreshSelectionSpacing() {
@@ -287,34 +308,48 @@ async function openBigPicture() {
     };
     heroLayers[nextSlot].replaceChildren(art);
   }
+  // App preferences -> "Aparência e loading / Cor de destaque" sets --accent.
+  function normalizedColor(value) {
+    return /^#[0-9a-f]{6}$/i.test(value || "") ? value.toUpperCase() : "#B6BDC8";
+  }
+  function themeAccent() {
+    return normalizedColor(getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+  }
   function refreshWaveColor(color) {
-    const active = !!prefs.defaultBackgroundHeroColor;
-    panel.classList.toggle("bp-wave-follows-hero", active);
-    if (!active) {
-      waves.style.removeProperty("--bp-wave-deep");
-      waves.style.removeProperty("--bp-wave-mid");
-      waves.style.removeProperty("--bp-wave-light");
-      waves.style.removeProperty("--bp-wave-hue-shift");
-      return;
-    }
-    // Same accent as the highlighted cart, from the native Hero histogram.
-    // Tint both the wave layers and the dark backdrop to match the game's Hero.
-    const hex = /^#[0-9a-f]{6}$/i.test(color) ? color : "#ACB7C1";
-    const channels = [1, 3, 5].map(pos => parseInt(hex.slice(pos, pos + 2), 16) / 255);
-    const max = Math.max(...channels), min = Math.min(...channels), delta = max - min;
+    const followHero = !!prefs.defaultBackgroundHeroColor;
+    panel.classList.toggle("bp-wave-follows-hero", followHero);
+    const hex = followHero ? normalizedColor(color) : themeAccent();
+    // The kicker always follows the same palette mode, even with a Hero
+    // photo as the visible background rather than the animated waves.
+    panel.style.setProperty("--bp-heading-accent", hex);
+    if (waveColor === hex) return;
+    const [r,g,b] = [1,3,5].map(i => parseInt(hex.slice(i,i+2),16)/255);
+    const max = Math.max(r,g,b), min = Math.min(r,g,b), delta = max-min;
     let hue = 214;
     if (delta > 0.0001) {
-      const [r, g, b] = channels;
-      if (max === r) hue = ((g - b) / delta) % 6;
-      else if (max === g) hue = (b - r) / delta + 2;
-      else hue = (r - g) / delta + 4;
-      hue = (hue * 60 + 360) % 360;
+      if (max === r) hue = ((g-b)/delta)%6;
+      else if (max === g) hue = (b-r)/delta+2;
+      else hue = (r-g)/delta+4;
+      hue = (hue*60+360)%360;
     }
     const h = Math.round(hue);
-    waves.style.setProperty("--bp-wave-deep", `hsl(${h} 60% 7%)`);
-    waves.style.setProperty("--bp-wave-mid", `hsl(${h} 68% 16%)`);
-    waves.style.setProperty("--bp-wave-light", `hsl(${h} 72% 23%)`);
-    waves.style.setProperty("--bp-wave-hue-shift", `${Math.round(hue - 214)}deg`);
+    const palette = {
+      "--bp-wave-deep": `hsl(${h} 60% 7%)`,
+      "--bp-wave-mid": `hsl(${h} 68% 16%)`,
+      "--bp-wave-light": `hsl(${h} 72% 23%)`,
+      "--bp-wave-hue-shift": `${Math.round(hue-214)}deg`,
+    };
+    // Recolor an invisible, independent background+SVG scene. A single
+    // opacity fade changes ALL wave bands and backdrop together; never
+    // interpolate hue-rotate through unwanted intermediate green colors.
+    const slot = 1-waveSlot;
+    const next = waveScenes[slot];
+    for (const [name,value] of Object.entries(palette)) next.style.setProperty(name,value);
+    next.dataset.accent = hex;
+    next.classList.add("is-active");
+    waveScenes[waveSlot].classList.remove("is-active");
+    waveSlot = slot;
+    waveColor = hex;
   }
   function refreshGlyphs(detectedFamily) {
     lastDetectedFamily = detectedFamily || "xbox";
@@ -344,28 +379,43 @@ async function openBigPicture() {
       hint([iconPack?.button(8, family)], "Configurações"),
     );
   }
-  // Use the same native heroaccent algorithm as loading title and cartridge.
-  // The first visit requests the dominant color once per game; stale results
-  // cannot recolor a different cartridge when a controller scrolls quickly.
+  // Cache current and neighboring games' dominant Hero colors.
+  // Keep the previous complete palette visible until the new color is ready,
+  // then change the glow, kicker and BOTH wave layers in one update.
+  function requestAccent(id) {
+    if (accentCache.has(id)) return Promise.resolve(accentCache.get(id));
+    if (accentRequests.has(id)) return accentRequests.get(id);
+    const task = api.BigPictureAccent(id)
+      .then(value => normalizedColor(value))
+      .catch(() => themeAccent())
+      .then(color => { accentCache.set(id,color); return color; })
+      .finally(() => accentRequests.delete(id));
+    accentRequests.set(id,task);
+    return task;
+  }
+  function prefetchNeighborAccents() {
+    const offset = prefs.scrollDirection === "horizontal" ? prefs.rows : 1;
+    for (const i of [selected-offset,selected+offset]) {
+      const id=rows[i]?.ID;
+      if (id) requestAccent(id);
+    }
+  }
   function refreshAccent() {
     const id = rows[selected]?.ID;
     const serial = ++accentRequestSerial;
-    const apply = (value) => {
+    const apply = color => {
       if (serial !== accentRequestSerial || !panel.isConnected) return;
-      const color = /^#[0-9a-f]{6}$/i.test(value || "") ? value.toUpperCase() : "#ACB7C1";
-      panel.style.setProperty("--bp-glow-color", color);
-      panel.style.setProperty("--bp-glow-soft", color + "88");
-      panel.style.setProperty("--bp-glow-wide", color + "50");
-      refreshWaveColor(color);
+      heroAccent = normalizedColor(color);
+      panel.style.setProperty("--bp-glow-color", heroAccent);
+      panel.style.setProperty("--bp-glow-soft", heroAccent + "88");
+      panel.style.setProperty("--bp-glow-wide", heroAccent + "50");
+      refreshWaveColor(heroAccent);
     };
-    if (!id) { apply("#ACB7C1"); return; }
-    if (accentCache.has(id)) { apply(accentCache.get(id)); return; }
-    // Never show the prior game's color while this Hero is loading.
-    apply("#ACB7C1");
-    api.BigPictureAccent(id).then((color) => {
-      accentCache.set(id,color);
-      apply(color);
-    }).catch(() => apply("#ACB7C1"));
+    if (!id) { apply(themeAccent()); return; }
+    // Never flash a neutral or stale background on an uncached game.
+    if (accentCache.has(id)) apply(accentCache.get(id));
+    else requestAccent(id).then(apply);
+    prefetchNeighborAccents();
   }
   function select(index, focus = true) {
     if (!cards[index]) return;
