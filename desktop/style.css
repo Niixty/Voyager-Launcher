@@ -902,18 +902,20 @@ pre {
 .bp-wave-drift {
   transform-box: fill-box;
   transform-origin: center;
-  animation-play-state: paused;
   will-change: transform;
-}
-/* Pause the SVG compositor when the Hero is visible or waves are hidden. */
-.big-picture.bp-default-background .bp-wave-drift {
-  animation-play-state: running;
 }
 .bp-wave-drift-back {
   animation: bp-wave-breathe-back 24s ease-in-out infinite alternate;
 }
 .bp-wave-drift-front {
   animation: bp-wave-breathe-front 19s ease-in-out infinite alternate;
+}
+/* Pause both SVG paths whenever the Hero takes over the background. */
+.big-picture:not(.bp-default-background) .bp-wave-drift {
+  animation-play-state: paused;
+}
+.big-picture.bp-default-background .bp-wave-drift {
+  animation-play-state: running;
 }
 @keyframes bp-wave-breathe-back {
   from { transform: translate3d(-2%, 1%, 0) scale(1.02); }
