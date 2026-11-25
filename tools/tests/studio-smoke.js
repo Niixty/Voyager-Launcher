@@ -73,6 +73,22 @@
       "Composição nativa",
     );
     await probe.Progress("editor-ready");
+    // Four independent per-game visuals must survive saving a layout.
+    const appearance = [...document.querySelectorAll(".appearanceControl input[data-appearance]")];
+    if (appearance.length !== 4) throw Error("Aparência do loading não tem quatro controles");
+    for (const [key, value] of [
+      ["heroBrightness", 75],
+      ["heroBlur", 0],
+      ["titleBrightness", 145],
+      ["cartridgeBrightness", 175],
+    ]) {
+      const slider = appearance.find((input) => input.dataset.appearance === key);
+      if (!slider) throw Error("Controle visual ausente: " + key);
+      set(slider, String(value));
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+      const label = slider.closest(".appearanceControl")?.querySelector("strong");
+      if (!label || label.textContent !== value + "%") throw Error("Porcentagem visual incorreta: " + key);
+    }
     const layer = [...document.querySelectorAll(".panel select")].find((select) =>
       [...select.options].some((option) => option.value === "title"),
     );
@@ -148,6 +164,10 @@
     );
     await probe.Progress("saved");
     const saved = await api.Layout("Smoke");
+    if (saved.heroBrightness !== 75 || saved.heroBlur !== 0 ||
+        saved.titleBrightness !== 145 || saved.cartridgeBrightness !== 175) {
+      throw Error("Brilho/blur de Hero, título e cartucho não persistiram separadamente");
+    }
     if (saved.stageTexts?.length !== 10 || saved.stageTexts[1] !== "Soprando cartucho do meu jeito...") {
       throw Error("Mensagens personalizadas das etapas não foram salvas no layout");
     }

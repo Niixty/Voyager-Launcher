@@ -11,6 +11,25 @@ import (
 // Neutral is used when no hero image is present or when it is grayscale.
 const Neutral uint32 = 0xFFACB7C1
 
+// AdjustBrightness brightens or darkens the same dominant Hero color without
+// resampling the Hero. 100% is the original accent; values over 100% gently
+// mix toward white, avoiding hue clipping from a naive RGB multiplier.
+func AdjustBrightness(rgb uint32, percent int) uint32 {
+    if rgb==0 {rgb=Neutral}
+    if percent<0 {percent=0}
+    if percent>200 {percent=200}
+    alpha:=rgb&0xff000000
+    if percent==100 {return rgb}
+    channel:=func(shift uint) uint32 {
+        v:=int((rgb>>shift)&0xff)
+        if percent<=100 {
+            return uint32((v*percent+50)/100)
+        }
+        return uint32(v+((255-v)*(percent-100)+50)/100)
+    }
+    return alpha | channel(16)<<16 | channel(8)<<8 | channel(0)
+}
+
 // FromFile calculates the accent once, when the loading begins.
 func FromFile(path string) uint32 {
     if path == "" { return Neutral }

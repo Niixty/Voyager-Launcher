@@ -160,6 +160,19 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
         p.fill(originX,originY,w,h,palette(overlayTheme.Color("background")))
         if background!=nil {p.imageCover(background,originX,originY,w,h)}
         p.fill(originX,originY,w,h,palette(overlayTheme.Color("dimOverlay")))
+        if background!=nil {
+            // Adjust the visible, already dimmed Hero. This allows the
+            // brightness slider to work even when global BackgroundDim=78%.
+            // It is drawn only into the static cached layer, never at 60 Hz.
+            level:=layout.HeroBrightnessLevel()
+            if level<100 {
+                alpha:=uint32((100-level)*255/100)
+                p.fill(originX,originY,w,h,palette(alpha<<24))
+            } else if level>100 {
+                alpha:=uint32((level-100)*255/100)
+                p.fill(originX,originY,w,h,palette(alpha<<24|0x00ffffff))
+            }
+        }
     }else{p.clear(0)}
     s:=math.Min(float64(w)/ll.VirtualWidth,float64(h)/ll.VirtualHeight)
     if s>2.6{s=2.6}
@@ -170,6 +183,8 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
     Y:=func(v float64)int{return int(math.Round(top+v*s))}
     D:=func(v float64)int{return int(math.Max(1,math.Round(v*s)))}
     if heroColor==0 {heroColor=heroaccent.Neutral}
+    titleAccent:=heroaccent.AdjustBrightness(heroColor,layout.TitleBrightnessLevel())
+    cartridgeAccent:=heroaccent.AdjustBrightness(heroColor,layout.CartridgeBrightnessLevel())
     if phase==""{phase="Preparando o jogo"}
     if failed && detail!="" {phase=detail}
     description:=[]rune(c.Description)
@@ -178,7 +193,7 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
         if !n.Visible && !(failed && n.ID==ll.Phase){continue}
         xx,yy,ww,hh:=X(n.X),Y(n.Y),D(n.W),D(n.H)
         if n.ID==ll.Cartridge {
-            if cartridge!=nil {p.drawLoadingAsset(cartridge,xx,Y(n.Y+bounceY),ww,hh,percent,heroColor,failed)}
+            if cartridge!=nil {p.drawLoadingAsset(cartridge,xx,Y(n.Y+bounceY),ww,hh,percent,cartridgeAccent,failed)}
             continue
         }
         if n.ID==ll.Progress {continue} // The cartridge or Grid is the loading bar.
@@ -191,7 +206,7 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
             themeColor=overlayTheme.Color("platform")
         case ll.Title:
             value=c.Title
-            themeColor=heroColor
+            themeColor=titleAccent
             bold=true
         case ll.Description:
             if !appPrefs.ShowDescription{continue}
@@ -222,7 +237,13 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
         p.textAligned(xx,yy,ww,hh,value,n.FontSize*float32(s),palette(themeColor),bold,n.TextAlign,n.VerticalAlign)
     }
 }
-func loadBlurry(src string) *img {
+// Preserve the old helper for existing call sites; individual layouts can
+// now override blur intensity without touching global preferences.
+func loadBlurry(src string) *img {return loadBlurryStrength(src,50)}
+func loadBlurryStrength(src string,strength int) *img {
+    if strength<=0 {return loadImg(src)}
+    if strength>100 {strength=100}
+    radius:=int(math.Max(1,math.Round(float64(strength)*0.10)))
 	if src == "" {
 		return nil
 	}
@@ -232,7 +253,7 @@ func loadBlurry(src string) *img {
 	}
 	cache := filepath.Join(os.TempDir(), "VoyagerLauncher", "blur")
 	_ = os.MkdirAll(cache, 0700)
-	name := fmt.Sprintf("%x-%d-%d.png", simpleHash(src), stat.Size(), stat.ModTime().UnixNano())
+	name := fmt.Sprintf("%x-%d-%d-r%d.png", simpleHash(src), stat.Size(), stat.ModTime().UnixNano(),radius)
 	dst := filepath.Join(cache, name)
 	if _, e := os.Stat(dst); e == nil {
 		return loadImg(dst)
@@ -272,7 +293,7 @@ func loadBlurry(src string) *img {
 		for y := 0; y < h; y++ {
 			for x := 0; x < w; x++ {
 				r, g, b, n := 0, 0, 0, 0
-				for dx := -5; dx <= 5; dx++ {
+				for dx := -radius; dx <= radius; dx++ {
 					xx := x + dx
 					if xx < 0 {
 						xx = 0
@@ -292,7 +313,7 @@ func loadBlurry(src string) *img {
 		for y := 0; y < h; y++ {
 			for x := 0; x < w; x++ {
 				r, g, b, n := 0, 0, 0, 0
-				for dy := -5; dy <= 5; dy++ {
+				for dy := -radius; dy <= radius; dy++ {
 					yy := y + dy
 					if yy < 0 {
 						yy = 0
@@ -346,7 +367,8 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath, cartridgePath strin
 		defer cartridge.close()
 	}
 	var bg *img
-    if appPrefs.BlurBackground { bg = loadBlurry(heroPath) } else { bg = loadImg(heroPath) }
+    layout,_:=loadEffectiveLoadingLayout(id)
+    bg=loadBlurryStrength(heroPath,layout.HeroBlurLevel(appPrefs.BlurBackground))
 	if bg != nil {
 		defer bg.close()
 	}
@@ -354,8 +376,7 @@ func previewScreenshot(c gameConfig, id, gridPath, heroPath, cartridgePath strin
 	if err != nil {
 		return "", err
 	}
-	layout,_:=loadEffectiveLoadingLayout(id)
-	drawOverlay(p, c, 0, 0, 1920, 1080, 50, "Preparando a tela do jogo", "", cartridge, bg, heroaccent.FromFile(heroPath), 0, layout, false)
+    drawOverlay(p, c, 0, 0, 1920, 1080, 50, "Preparando a tela do jogo", "", cartridge, bg, heroaccent.FromFile(heroPath), 0, layout, false)
 	p.close()
 	defer call(pGdipDisposeImage, bmp)
 	folder := knownPictures()
@@ -564,11 +585,7 @@ func (o *overlayState) run() error {
 	// Cor calculada uma unica vez, a partir da arte original do jogo.
 	// O tema escolhido em AJUSTES afeta somente a interface do gerenciador.
 	o.accent = heroaccent.FromFile(heroPath)
-	if appPrefs.BlurBackground {
-		o.background = loadBlurry(heroPath)
-	} else {
-		o.background = loadImg(heroPath)
-	}
+	o.background=loadBlurryStrength(heroPath,o.layout.HeroBlurLevel(appPrefs.BlurBackground))
 	if err := registerOverlayWindow(); err != nil {
 		return err
 	}

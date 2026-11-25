@@ -49,6 +49,12 @@ type Layout struct {
     Version int `json:"version"`
     Elements []Element `json:"elements"`
     StageTexts []string `json:"stageTexts,omitempty"`
+    // Nil means "inherit the factory setting". Explicit zero values are
+    // distinct: HeroBlur=0 disables blur and HeroBrightness=0 makes it dark.
+    HeroBrightness *int `json:"heroBrightness,omitempty"`
+    HeroBlur *int `json:"heroBlur,omitempty"`
+    TitleBrightness *int `json:"titleBrightness,omitempty"`
+    CartridgeBrightness *int `json:"cartridgeBrightness,omitempty"`
 }
 
 func Default() Layout {
@@ -74,6 +80,10 @@ func IsText(id string)bool {return id!=Cartridge && id!=Progress}
 func (l Layout) Clone() Layout {
     l.Elements=append([]Element(nil),l.Elements...)
     l.StageTexts=append([]string(nil),l.StageTexts...)
+    if l.HeroBrightness!=nil {v:=*l.HeroBrightness;l.HeroBrightness=&v}
+    if l.HeroBlur!=nil {v:=*l.HeroBlur;l.HeroBlur=&v}
+    if l.TitleBrightness!=nil {v:=*l.TitleBrightness;l.TitleBrightness=&v}
+    if l.CartridgeBrightness!=nil {v:=*l.CartridgeBrightness;l.CartridgeBrightness=&v}
     return l
 }
 func (l *Layout) Find(id string)*Element {
@@ -89,6 +99,25 @@ func (l *Layout) MoveLayer(id string,delta int) {
     }
 }
 
+func clampPercent(v *int,min,max int)*int {
+    if v==nil{return nil}
+    out:=*v
+    if out<min {out=min}
+    if out>max {out=max}
+    return &out
+}
+func valueOr(v *int,defaultValue int) int {
+    if v==nil{return defaultValue}
+    return *v
+}
+func (l Layout) HeroBrightnessLevel() int {return valueOr(clampPercent(l.HeroBrightness,0,200),100)}
+func (l Layout) TitleBrightnessLevel() int {return valueOr(clampPercent(l.TitleBrightness,25,200),100)}
+func (l Layout) CartridgeBrightnessLevel() int {return valueOr(clampPercent(l.CartridgeBrightness,25,200),100)}
+func (l Layout) HeroBlurLevel(globalBlur bool) int {
+    fallback:=0
+    if globalBlur {fallback=50}
+    return valueOr(clampPercent(l.HeroBlur,0,100),fallback)
+}
 func clamp(v,lo,hi float64)float64 {
     if math.IsNaN(v)||math.IsInf(v,0){return lo}
     if v<lo{return lo}
@@ -123,7 +152,11 @@ func (e *Element) Normalize(){
 func (l Layout) Normalize() Layout {
     defaults:=Default()
     result:=Layout{Version:1,Elements:make([]Element,0,len(defaults.Elements)),
-        StageTexts:loadingprogress.NormalizeTexts(l.StageTexts)}
+        StageTexts:loadingprogress.NormalizeTexts(l.StageTexts),
+        HeroBrightness:clampPercent(l.HeroBrightness,0,200),
+        HeroBlur:clampPercent(l.HeroBlur,0,100),
+        TitleBrightness:clampPercent(l.TitleBrightness,25,200),
+        CartridgeBrightness:clampPercent(l.CartridgeBrightness,25,200)}
     seen:=make(map[string]bool)
     for _,node:=range l.Elements {
         if !ValidID(node.ID)||seen[node.ID]{continue}

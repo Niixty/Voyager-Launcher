@@ -304,6 +304,7 @@ func (s *Studio) Frame(id string, l ll.Layout) (string, error) {
     return s.FrameProgress(id,l,50)
 }
 func (s *Studio) FrameProgress(id string,l ll.Layout,percent int) (string,error) {
+    l=l.Normalize()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, e := readConfig(id)
@@ -312,11 +313,7 @@ func (s *Studio) FrameProgress(id string,l ll.Layout,percent int) (string,error)
 	}
 	hero := artworkPath(c, id, "hero")
 	var bg *img
-	if appPrefs.BlurBackground {
-		bg = loadBlurry(hero)
-	} else {
-		bg = loadImg(hero)
-	}
+	bg=loadBlurryStrength(hero,l.HeroBlurLevel(appPrefs.BlurBackground))
 	if bg != nil {
 		defer bg.close()
 	}
@@ -474,11 +471,7 @@ func (s *Studio) AnimationLayersProgress(id string,l ll.Layout,percent int) (map
 	l = l.Normalize()
 	hero := artworkPath(c, id, "hero")
 	var bg *img
-	if appPrefs.BlurBackground {
-		bg = loadBlurry(hero)
-	} else {
-		bg = loadImg(hero)
-	}
+	bg=loadBlurryStrength(hero,l.HeroBlurLevel(appPrefs.BlurBackground))
 	if bg != nil {
 		defer bg.close()
 	}
@@ -487,11 +480,15 @@ func (s *Studio) AnimationLayersProgress(id string,l ll.Layout,percent int) (map
 		if n.ID != ll.Cartridge {
 			continue
 		}
-		base, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[:i],StageTexts:l.StageTexts}, nil, bg, accent, true,percent)
+        below:=l.Clone()
+        below.Elements=l.Elements[:i]
+		base, e := renderFramePercent(c, below, nil, bg, accent, true,percent)
 		if e != nil {
 			return nil, e
 		}
-		above, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[i+1:],StageTexts:l.StageTexts}, nil, nil, accent, false,percent)
+        aboveLayout:=l.Clone()
+        aboveLayout.Elements=l.Elements[i+1:]
+		above, e := renderFramePercent(c, aboveLayout, nil, nil, accent, false,percent)
 		if e != nil {
 			return nil, e
 		}
@@ -501,12 +498,12 @@ func (s *Studio) AnimationLayersProgress(id string,l ll.Layout,percent int) (map
 		}
 		sprite:=""
         if artwork:=loadImg(artworkPath(c,id,kind));artwork!=nil {
-            sprite,e=loadingSpritePreview(artwork,accent,percent)
+            sprite,e=loadingSpritePreview(artwork,heroaccent.AdjustBrightness(accent,l.CartridgeBrightnessLevel()),percent)
             artwork.close()
             if e!=nil{return nil,e}
         }
         return map[string]string{"base":base,"above":above,"kind":kind,
-          "sprite":sprite,"accent":fmt.Sprintf("#%06X",accent&0xFFFFFF)},nil
+          "sprite":sprite,"accent":fmt.Sprintf("#%06X",heroaccent.AdjustBrightness(accent,l.CartridgeBrightnessLevel())&0xFFFFFF)},nil
 	}
 	return nil, errors.New("layout sem camada de cartucho")
 }

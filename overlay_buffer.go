@@ -11,6 +11,7 @@ import (
     "unsafe"
 
     "voyager/native/internal/loadingprogress"
+    "voyager/native/internal/heroaccent"
     ll "voyager/native/internal/loadinglayout"
 )
 
@@ -186,7 +187,8 @@ func (b *overlayBackbuffer) prepareSprite(o *overlayState) {
         return
     }
     b.source=source
-    accent:=loadingAccent(o.accent,false)
+    cartAccent:=heroaccent.AdjustBrightness(o.accent,o.layout.CartridgeBrightnessLevel())
+    accent:=loadingAccent(cartAccent,false)
     if glow,e:=loadingBitmap(loadingprogress.Halo(source,radius,accent));e==nil {
         b.halo=glow
         // Pre-render the silhouette glow once; Win32 AlphaBlend will vary
@@ -205,7 +207,7 @@ func (b *overlayBackbuffer) prepareSprite(o *overlayState) {
         }
         b.alphaFrames[i]=frame
     }
-    b.startSpriteWorker(o.accent)
+    b.startSpriteWorker(cartAccent)
     b.updateSprite(o)
 }
 

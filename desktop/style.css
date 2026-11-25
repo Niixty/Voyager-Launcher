@@ -805,3 +805,47 @@ pre {
   }
   .stageMessageRow > span { grid-column: 1 / -1; }
 }
+
+/* Per-game loading appearance: four independent high-contrast sliders. */
+.loadingAppearance {
+  display: grid;
+  gap: 15px;
+  margin-top: 12px;
+}
+.loadingAppearance h2 { margin: 0; }
+.appearanceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.appearanceControl {
+  display: grid;
+  gap: 8px;
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #13171e;
+}
+.appearanceControlHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 13px;
+}
+.appearanceControlHeading strong {
+  font-size: 15px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.appearanceControl input[type="range"] {
+  width: 100%;
+  margin: 3px 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.loadingAppearance > button { justify-self: start; }
+@media (max-width: 700px) {
+  .appearanceGrid { grid-template-columns: 1fr; }
+}

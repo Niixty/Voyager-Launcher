@@ -403,3 +403,33 @@ camada editável; é possível reativar as que já foram ocultadas.
 O checkbox **Camada ativada**, dentro das propriedades da camada
 selecionada, possui a mesma função. O estado de visibilidade é salvo
 junto do layout.
+
+
+### Brilho individual da Hero e da cor dominante — Editor de loading
+
+Na seção **Aparência do loading**, quatro controles independentes fazem
+parte do layout de cada jogo:
+
+- **Brilho da Hero de fundo**: de 0% a 200%. Em 100%, a arte mantém o
+  visual já configurado no Voyager, inclusive o escurecimento global. O
+  brilho é aplicado no fundo já escurecido, para que aumentá-lo tenha
+  efeito mesmo com a opção global de escurecimento elevada.
+- **Intensidade do blur**: de 0% a 100%. Zero mantém a imagem original;
+  valores maiores aplicam um desfoque mais forte. Sem ajuste individual,
+  segue a preferência global de blur (equivalente a 50% se ativada ou
+  0% se desativada). O arquivo borrado é mantido em cache por intensidade,
+  sem recalcular o efeito em cada frame.
+- **Brilho da cor dominante no título**: de 25% a 200%, independente
+  do preenchimento do cartucho.
+- **Brilho da cor dominante no cartucho/Grid**: de 25% a 200%, afetando
+  o preenchimento e o halo da imagem, mas não a cor do título.
+
+Os valores ficam nas propriedades opcionais `heroBrightness`,
+`heroBlur`, `titleBrightness` e `cartridgeBrightness` do
+`loading_layout.json`. Os controles mostram a prévia no Editor, no
+teste de 10 segundos e durante a abertura real de jogos e RetroArch.
+O botão **Restaurar aparência original** redefine apenas esses
+quatro valores, sem alterar as posições nem as mensagens das etapas.
+Como os campos são opcionais, layouts antigos preservam a aparência
+anterior até que sejam personalizados. As opções de salvar o layout
+para o jogo, como padrão futuro ou como padrão global continuam válidas.

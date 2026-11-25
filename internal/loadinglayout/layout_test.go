@@ -180,3 +180,37 @@ func TestCustomStageTextsSurviveLayoutRoundtripAndLegacyMigration(t *testing.T) 
         t.Fatalf("layout antigo sem etapas customizadas: %+v",older.StageTexts)
     }
 }
+
+
+func TestIndependentHeroPresentationPreferences(t *testing.T) {
+    initial:=Default()
+    if initial.HeroBrightnessLevel()!=100 || initial.TitleBrightnessLevel()!=100 || initial.CartridgeBrightnessLevel()!=100 {
+        t.Fatal("brilho de fábrica deve manter a cor da Hero sem alterações")
+    }
+    if initial.HeroBlurLevel(true)!=50 || initial.HeroBlurLevel(false)!=0 {
+        t.Fatal("layouts antigos devem herdar a preferência global de blur")
+    }
+    zero:=0; high:=250; low:=-30; title:=170
+    initial.HeroBrightness=&zero
+    initial.HeroBlur=&zero
+    initial.TitleBrightness=&title
+    initial.CartridgeBrightness=&high
+    normalized:=initial.Normalize()
+    if normalized.HeroBrightnessLevel()!=0 || normalized.HeroBlurLevel(true)!=0 || normalized.TitleBrightnessLevel()!=170 || normalized.CartridgeBrightnessLevel()!=200 {
+        t.Fatalf("normalização incorreta: %+v",normalized)
+    }
+    cloned:=normalized.Clone()
+    *cloned.HeroBrightness=99
+    *cloned.TitleBrightness=30
+    if normalized.HeroBrightnessLevel()!=0 || normalized.TitleBrightnessLevel()!=170 {t.Fatal("Clone compartilha ponteiros")}
+    normalized.HeroBrightness=&low
+    if normalized.Normalize().HeroBrightnessLevel()!=0 {t.Fatal("brilho fora dos limites")}
+    path:=filepath.Join(t.TempDir(),"loading_layout.json")
+    if err:=Save(path,initial);err!=nil{t.Fatal(err)}
+    loaded,err:=Load(path)
+    if err!=nil{t.Fatal(err)}
+    if loaded.HeroBrightnessLevel()!=0 || loaded.HeroBlurLevel(true)!=0 || loaded.TitleBrightnessLevel()!=170 || loaded.CartridgeBrightnessLevel()!=200 {
+        t.Fatalf("configurações não persistiram: %+v",loaded)
+    }
+    if loaded.Find(Title).Color!="hero" {t.Fatal("título deixou de usar Hero")}
+}

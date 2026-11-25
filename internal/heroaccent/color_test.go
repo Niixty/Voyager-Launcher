@@ -63,3 +63,16 @@ func TestPNGFile(t *testing.T) {
  got:=FromFile(path)
  if (got>>8)&255 <= (got>>16)&255{t.Fatalf("green expected: #%08x",got)}
 }
+
+
+func TestAdjustBrightnessIndependentOfDominantSelection(t *testing.T) {
+    base:=uint32(0xff5080c0)
+    if AdjustBrightness(base,100)!=base {t.Fatal("100% precisa preservar a Hero")}
+    dark:=AdjustBrightness(base,50)
+    if (dark&0xff)!=0x60 || ((dark>>16)&0xff)!=0x28 {t.Fatalf("escurecimento: %#x",dark)}
+    light:=AdjustBrightness(base,150)
+    if (light&0xff)<=0xc0 || ((light>>16)&0xff)<=0x50 {t.Fatalf("clareamento: %#x",light)}
+    if AdjustBrightness(base,-1)!=0xff000000 {t.Fatal("0% é preto")}
+    if AdjustBrightness(base,250)!=0xffffffff {t.Fatal("200% é branco")}
+    if AdjustBrightness(0,100)!=Neutral {t.Fatal("fallback neutro")}
+}

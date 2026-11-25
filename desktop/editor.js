@@ -1,7 +1,7 @@
 "use strict";
 async function editor(g) {
   const serial = page,
-    [initial, factory] = await Promise.all([api.Layout(g.ID), api.Factory()]);
+    [initial, factory, prefs] = await Promise.all([api.Layout(g.ID), api.Factory(), api.Prefs()]);
   if (page !== serial) return;
   let doc = structuredClone(initial),
     sel = "cartridge",
@@ -31,6 +31,7 @@ async function editor(g) {
     stage = el("div", null, "stage"),
     props = el("section", null, "panel"),
     stageEditor = el("section", null, "panel stageMessageEditor"),
+    appearancePanel = el("section", null, "panel loadingAppearance"),
     layer = el("select");
   const pick = () => doc.elements.find((x) => x.id === sel);
   const selectedNodes = () => doc.elements.filter((x) => selected.has(x.id));
@@ -113,7 +114,73 @@ async function editor(g) {
     btn("Desfazer", () => history(undo, redo)),
     btn("Refazer", () => history(redo, undo)),
   );
-  main.append(controls, outer, props, stageEditor);
+  // Each game can override the appearance independently. Null/absent
+  // values preserve the original look and inherit global blur preferences.
+  const appearanceSpecs = [
+    ["heroBrightness", "Brilho da Hero de fundo", 0, 200, 100],
+    ["heroBlur", "Intensidade do blur", 0, 100, prefs.blurBackground ? 50 : 0],
+    ["titleBrightness", "Brilho da cor dominante no título", 25, 200, 100],
+    ["cartridgeBrightness", "Brilho da cor dominante no cartucho/Grid", 25, 200, 100],
+  ];
+  const appearanceSliders = [];
+  appearancePanel.append(
+    el("h2", "Aparência do loading"),
+    el("p", "Controle cada brilho separadamente, usando a cor dominante da Hero. O blur em 0% mantém a imagem original nítida. O valor 100% de brilho preserva a cor original.", "stageHelp"),
+  );
+  const appearanceGrid = el("div", null, "appearanceGrid");
+  for (const [key, title, min, max, fallback] of appearanceSpecs) {
+    const wrapper = el("label", null, "appearanceControl");
+    const heading = el("span", null, "appearanceControlHeading");
+    const name = el("span", title);
+    const percent = el("strong", String(doc[key] ?? fallback) + "%");
+    const slider = inp(doc[key] ?? fallback, "range");
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.step = "1";
+    slider.dataset.appearance = key;
+    slider.setAttribute("aria-label", title);
+    heading.append(name, percent);
+    wrapper.append(heading, slider);
+    appearanceGrid.append(wrapper);
+    appearanceSliders.push({key, slider, percent, fallback});
+    let beforeChange = null;
+    const start = () => {
+      if (!beforeChange) beforeChange = structuredClone(doc);
+    };
+    slider.addEventListener("pointerdown", start);
+    slider.addEventListener("focus", start);
+    slider.oninput = () => {
+      start();
+      doc[key] = Number(slider.value);
+      percent.textContent = slider.value + "%";
+      dirty = true;
+      requestFrame();
+    };
+    slider.onchange = () => {
+      start();
+      if ((beforeChange[key] ?? fallback) !== Number(slider.value)) {
+        undo.push(beforeChange);
+        if (undo.length > 80) undo.shift();
+        redo.length = 0;
+        dirty = true;
+      }
+      beforeChange = null;
+      requestFrame();
+    };
+  }
+  appearancePanel.append(appearanceGrid, btn("Restaurar aparência original", () => {
+    remember();
+    for (const [key] of appearanceSpecs) doc[key] = null;
+    refresh();
+  }));
+  function syncAppearanceSliders() {
+    for (const entry of appearanceSliders) {
+      if (document.activeElement === entry.slider) continue;
+      entry.slider.value = String(doc[entry.key] ?? entry.fallback);
+      entry.percent.textContent = entry.slider.value + "%";
+    }
+  }
+  main.append(controls, appearancePanel, outer, props, stageEditor);
   outer.append(stage);
   stage.tabIndex = 0;
   stage.setAttribute("aria-label", "Área de edição, 1600 por 900 pixels");
@@ -585,6 +652,7 @@ async function editor(g) {
     outlines();
     properties();
     syncStageInputs();
+    syncAppearanceSliders();
     requestFrame();
   }
   function keys(e) {
