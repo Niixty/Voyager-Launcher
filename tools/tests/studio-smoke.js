@@ -414,8 +414,13 @@
     const transparent = (node) => ["transparent","rgba(0, 0, 0, 0)"].includes(
       getComputedStyle(node).backgroundColor);
     if (!cartridgeCard || !cartridgeCover ||
-        !transparent(cartridgeCard) || !transparent(cartridgeCover))
-      throw Error("A imagem Cartucho ainda tem um retângulo de fundo");
+        !transparent(cartridgeCard) || !transparent(cartridgeCover)) {
+      const cardBg = cartridgeCard ? getComputedStyle(cartridgeCard).backgroundColor : "missing";
+      const coverBg = cartridgeCover ? getComputedStyle(cartridgeCover).backgroundColor : "missing";
+      const cls = document.querySelector(".big-picture")?.className || "missing";
+      throw Error("Cartucho deveria ser transparente: card=" + cardBg +
+        " cover=" + coverBg + " mode=" + cls);
+    }
     if (getComputedStyle(cartridgeCard).outlineStyle !== "none")
       throw Error("A seleção do cartucho ainda desenha uma moldura retangular");
     // Serialized writes must persist beyond the current fullscreen session.
