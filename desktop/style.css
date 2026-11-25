@@ -903,11 +903,46 @@ pre {
 .bp-cartridges .bp-grid {
   grid-template-columns: repeat(auto-fill,minmax(clamp(190px,22vw,395px),1fr));
 }
+.bp-cartridges .bp-card,
+.bp-cartridges .bp-card:hover,
+.bp-cartridges .bp-card.selected,
+.bp-cartridges .bp-card:focus,
+.bp-cartridges .bp-card:focus-visible {
+  /* Only the transparent PNG should be visible; no solid card or frame. */
+  background: transparent;
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+.bp-cartridges .bp-card {
+  padding: .4em;
+}
 .bp-cartridges .bp-cover {
   aspect-ratio: 3/2;
-  background: rgba(10,16,23,.38);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
-.bp-cartridges .bp-cover img { object-fit: contain; }
+.bp-cartridges .bp-cover img {
+  object-fit: contain;
+  /* Highlight the cartridge silhouette rather than drawing a rectangle. */
+  transition: filter 160ms ease;
+}
+.bp-cartridges .bp-card.selected .bp-cover img,
+.bp-cartridges .bp-card:focus-visible .bp-cover img {
+  filter: drop-shadow(0 0 8px #9edcfbcc) drop-shadow(0 0 15px #9edcfb70);
+}
+.bp-open-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.bp-open-settings .gp-icon {
+  width: 28px;
+  height: 28px;
+}
 .bp-settings[hidden] { display: none !important; }
 .bp-settings {
   position: absolute;
@@ -957,6 +992,13 @@ pre {
 .bp-card.selected {
   outline: 3px solid #9edcfb;
   outline-offset: 2px;
+}
+/* More specific than the generic selection outline: transparent cartridges
+   use silhouette glow only, including when focused by controller. */
+.bp-cartridges .bp-card.selected,
+.bp-cartridges .bp-card:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 @media (max-width: 720px) {
   .bp-family {display: none;}

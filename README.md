@@ -470,3 +470,38 @@ Não altera a segurança do atualizador: uma release só pode ser aplicada
 quando os executáveis estão disponíveis e validados com SHA-256. A
 sincronização de código por Git permanece independente da atualização
 do EXE distribuído pelo GitHub Releases.
+
+
+### Big Picture: cartuchos sem painel, plataforma dinâmica e Select
+
+Ao escolher **Cartuchos** nas Configurações do Big Picture, o fundo
+retangular dos cartões, da área das imagens e da seleção é removido.
+O arquivo `cartridge.png` é renderizado sobre a Hero, preservando a
+transparência PNG; o cartucho selecionado recebe um brilho suave no
+contorno em vez de uma moldura. Em **Capas Grid**, o estilo tradicional
+das capas continua inalterado.
+
+O título principal do Big Picture agora exibe o valor de **Plataforma**
+do jogo selecionado (ex.: `Super Nintendo`). Navegar para um jogo de
+outra plataforma atualiza o cabeçalho; caso a plataforma não esteja
+preenchida, mostra `Biblioteca de jogos`.
+
+**Configurações:** controle Xbox **Select/View** ou PlayStation **Share/
+Create** (botão padrão 8 da Gamepad API). O antigo **Start/Menu** (botão
+9) deixa de abrir Configurações; fica disponível para futuras ações.
+O ícone de Select aparece no botão superior e no rodapé, acompanhando
+a família de controle utilizada. O teclado mantém `F1` e `S`.
+
+Os **38 ícones PNG originais com transparência** estão versionados na
+pasta [desktop/controller-icons](desktop/controller-icons/):
+- Xbox: `xb_select.png`, `xb_a.png`, `xb_b.png` e outros `xb_*.png`
+- PlayStation: `ps_x.png`, `ps_circle.png` e outros `ps_*.png`
+- Genéricos: `generic_select.png`, `generic_dpad_up.png`,
+  `generic_left_stick.png` e outros `generic_*.png`
+
+O catálogo e o mapeamento das teclas ficam em
+[`desktop/controller-icons.js`](desktop/controller-icons.js), e a
+licença/atribuição em `desktop/controller-icons/LICENSE.md`. Os PNGs
+são embutidos no executável no build e acessados internamente pelo
+endereço `/controller-icons/<nome>.png`; para visualizar ou substituir
+os arquivos originais, abra a pasta do repositório no GitHub Desktop.

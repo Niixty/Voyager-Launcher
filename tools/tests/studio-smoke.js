@@ -321,6 +321,12 @@
       api.SteamGridImages = steamMethods.images;
       document.querySelector(".sgdb-dialog")?.close();
     }
+    // Visual header follows the platform of the selected game, not the
+    // generic "Big Picture" label. Use two different platform names.
+    const sortedGames = [...games].sort((a,b) =>
+      (a.Config.title || a.ID).localeCompare(b.Config.title || b.ID, "pt-BR"));
+    sortedGames[0].Config.platform = "Super Nintendo";
+    sortedGames[1].Config.platform = "Nintendo 64";
     const buttons = Array.from({length: 16}, () => ({pressed:false}));
     const pad = {mapping:"standard", connected:true, buttons, axes:[0, 0]};
     Object.defineProperty(navigator, "getGamepads", {configurable:true, value:() => [pad]});
@@ -331,11 +337,20 @@
     await probe.Progress("before-bigpicture");
     click("Big Picture");
     await wait(() => document.querySelectorAll(".bp-card").length === 2, "Capas Big Picture");
+    if (document.querySelector(".bp-heading h1")?.textContent !== "Super Nintendo")
+      throw Error("Cabeçalho do Big Picture não mostra a plataforma selecionada");
     const iconAPI = window.VoyagerGamepadIcons;
     if (!iconAPI || iconAPI.names.length !== 38)
       throw Error("Registro completo de ícones genéricos/Xbox/PlayStation ausente");
     if (iconAPI.buttonName(0, "xbox") !== "xb_a" || iconAPI.buttonName(0, "playstation") !== "ps_x")
       throw Error("Mapeamento dos botões Xbox/PlayStation está incorreto");
+    if (iconAPI.buttonName(8, "xbox") !== "xb_select" ||
+        iconAPI.buttonName(8, "playstation") !== "generic_select")
+      throw Error("Select deve usar os ícones de Xbox/PlayStation correspondentes");
+    await wait(() => document.querySelector(".bp-open-settings img[src*='xb_select.png']"),
+      "Ícone Select no botão Configurações");
+    await wait(() => document.querySelector(".bp-controls img[src*='xb_select.png']"),
+      "Ícone Select nas dicas de controle");
     await wait(() => document.querySelector(".bp-controls img[src*='xb_a.png']"), "Botão Xbox A");
     const gamepadIcon = await fetch("/controller-icons/ps_x.png");
     if (!gamepadIcon.ok || !(await gamepadIcon.blob()).size)
@@ -346,6 +361,8 @@
     await wait(() => document.querySelector(".bp-controls img[src*='xb_a.png']"), "Retorno aos ícones Xbox");
     buttons[15].pressed = true;
     await wait(() => document.querySelectorAll(".bp-card")[1].matches(".selected"), "Direcional");
+    if (document.querySelector(".bp-heading h1")?.textContent !== "Nintendo 64")
+      throw Error("Título não atualiza quando muda a plataforma do jogo selecionado");
     buttons[15].pressed = false;
     buttons[0].pressed = true;
     await wait(() => launches.length > 0, "Botão A");
@@ -363,12 +380,22 @@
       connected:true, buttons:secondButtons, axes:[0,0],
     };
     Object.defineProperty(navigator, "getGamepads", {configurable:true, value:() => [pad, secondPad]});
+    // Start must no longer open Settings; Select does, on either pad.
     secondButtons[9].pressed = true;
-    await wait(() => !document.querySelector(".bp-settings").hidden, "Segundo controle abre configurações");
+    await new Promise((r) => setTimeout(r, 180));
+    if (!document.querySelector(".bp-settings").hidden)
+      throw Error("Start ainda abre configurações; o atalho correto é Select");
     secondButtons[9].pressed = false;
+    await new Promise((r) => setTimeout(r, 110));
+    secondButtons[8].pressed = true;
+    await wait(() => !document.querySelector(".bp-settings").hidden, "Select no segundo controle abre configurações");
+    secondButtons[8].pressed = false;
     await new Promise((r) => setTimeout(r, 120));
     if (!document.querySelector(".bp-controls img[src*='ps_x.png']"))
       throw Error("Glifos não acompanharam o segundo controle PlayStation");
+    if (!document.querySelector(".bp-controls img[src*='generic_select.png']") ||
+        !document.querySelector(".bp-open-settings img[src*='generic_select.png']"))
+      throw Error("Ícone Select genérico ausente para controles PlayStation");
     const toggles = [
       ["view", "cartridge"], ["background", "solid"],
       ["showTitle", false], ["showPlatform", false],
@@ -380,6 +407,17 @@
     }
     await wait(() => document.querySelector(".big-picture").classList.contains("bp-cartridges"),
       "Visualização de cartucho");
+    // The cartridge image must sit directly over the Hero without a
+    // dark rectangular background or filled selected card.
+    const cartridgeCard = document.querySelector(".bp-cartridges .bp-card.selected");
+    const cartridgeCover = cartridgeCard?.querySelector(".bp-cover");
+    const transparent = (node) => ["transparent","rgba(0, 0, 0, 0)"].includes(
+      getComputedStyle(node).backgroundColor);
+    if (!cartridgeCard || !cartridgeCover ||
+        !transparent(cartridgeCard) || !transparent(cartridgeCover))
+      throw Error("A imagem Cartucho ainda tem um retângulo de fundo");
+    if (getComputedStyle(cartridgeCard).outlineStyle !== "none")
+      throw Error("A seleção do cartucho ainda desenha uma moldura retangular");
     // Serialized writes must persist beyond the current fullscreen session.
     await wait(() => document.querySelector(".bp-settings-list"), "Configurações visíveis");
     let savedBp = await api.BigPictureOptions();

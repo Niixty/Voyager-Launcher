@@ -18,11 +18,13 @@ async function openBigPicture() {
   const logo = el("img", null, "bp-logo");
   logo.src = "/icon.ico";
   logo.alt = "Voyager";
+  const platformHeading = el("h1", "Biblioteca de jogos");
   const heading = add(el("div", null, "bp-heading"), logo, add(
-    el("div"), el("small", "BIBLIOTECA DE JOGOS"), el("h1", "Big Picture"),
+    el("div"), el("small", "BIBLIOTECA DE JOGOS"), platformHeading,
   ));
   const familyLabel = el("small", "", "bp-family");
-  const settingsButton = btn("⚙ Configurações", () => showSettings(true), "bp-open-settings");
+  const settingsButton = btn("", () => showSettings(true), "bp-open-settings");
+  settingsButton.setAttribute("aria-label", "Configurações (Select)");
   const exit = btn("", close, "bp-exit");
   exit.setAttribute("aria-label", "Sair do Big Picture");
   const headerActions = add(
@@ -162,6 +164,10 @@ async function openBigPicture() {
     exit.replaceChildren(
       iconPack?.button(1, family, "") || el("span", "B"), el("span", "Sair"),
     );
+    settingsButton.replaceChildren(
+      iconPack?.button(8, family, "Select") || el("span", "Select"),
+      el("span", "Configurações"),
+    );
     const hint = (icons, label) => {
       const wrapper = el("span", null, "bp-hint");
       const artwork = el("span", null, "bp-hint-icons");
@@ -173,13 +179,14 @@ async function openBigPicture() {
       hint([iconPack?.icon("generic_dpad_up"), iconPack?.stick("left")], "Navegar"),
       hint([iconPack?.button(0, family)], "Selecionar / jogar"),
       hint([iconPack?.button(1, family)], "Voltar"),
-      hint([iconPack?.button(9, family)], "Configurações"),
+      hint([iconPack?.button(8, family)], "Configurações"),
     );
   }
   function select(index, focus = true) {
     if (!cards[index]) return;
     cards[selected]?.classList.remove("selected");
     selected = index;
+    platformHeading.textContent = rows[index]?.Config?.platform?.trim() || "Biblioteca de jogos";
     cards[index].classList.add("selected");
     if (focus) cards[index].focus({ preventScroll: true });
     cards[index].scrollIntoView({ block: "nearest" });
@@ -283,7 +290,9 @@ async function openBigPicture() {
       if (!defaultFamily) defaultFamily = iconPack?.detect(pad) || "xbox";
       const pressed = (i) => !!pad.buttons?.[i]?.pressed;
       let action = "";
-      if (pressed(9)) action = "settings";
+      // Standard Gamepad API: 8 = Select/Back, 9 = Start/Menu.
+      // Settings must be opened by Select; leave Start unused for future actions.
+      if (pressed(8)) action = "settings";
       else if (pressed(1)) action = "back";
       else if (pressed(0)) action = "play";
       else if (pressed(12) || pad.axes?.[1] < -.55) action = "up";
