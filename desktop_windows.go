@@ -24,6 +24,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	wr "github.com/wailsapp/wails/v2/pkg/runtime"
 	"voyager/native/internal/heroaccent"
+    "voyager/native/internal/loadingprogress"
 	ll "voyager/native/internal/loadinglayout"
 	"voyager/native/internal/settings"
 )
@@ -340,7 +341,7 @@ func renderFramePercent(c gameConfig,l ll.Layout,cart,bg *img,accent uint32,pain
 		return "", e
 	}
 	defer call(pGdipDisposeImage, b)
-	drawOverlayPass(p, c, 0, 0, 1920, 1080, percent, "Preparando a tela do jogo", "", cart, bg, accent, 0, l, false, paintBackground)
+	drawOverlayPass(p, c, 0, 0, 1920, 1080, percent, loadingprogress.StageWithTexts(percent,l.StageTexts), "", cart, bg, accent, 0, l, false, paintBackground)
 	p.close()
 	dir, e := os.MkdirTemp("", "voyager-preview-")
 	if e != nil {
@@ -486,11 +487,11 @@ func (s *Studio) AnimationLayersProgress(id string,l ll.Layout,percent int) (map
 		if n.ID != ll.Cartridge {
 			continue
 		}
-		base, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[:i]}, nil, bg, accent, true,percent)
+		base, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[:i],StageTexts:l.StageTexts}, nil, bg, accent, true,percent)
 		if e != nil {
 			return nil, e
 		}
-		above, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[i+1:]}, nil, nil, accent, false,percent)
+		above, e := renderFramePercent(c, ll.Layout{Elements: l.Elements[i+1:],StageTexts:l.StageTexts}, nil, nil, accent, false,percent)
 		if e != nil {
 			return nil, e
 		}

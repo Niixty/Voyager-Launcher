@@ -374,3 +374,32 @@ normalização, sem alterar fonte, alinhamento nem posição.
 
 Se não houver Hero legível ou houver apenas tons acinzentados, é
 utilizada a cor neutra de fallback.
+
+
+### Editor de etapas e controle de visibilidade das camadas
+
+O Editor de loading agora inclui um **Editor de etapas** com dez mensagens
+personalizáveis, associadas aos marcos de progresso de 0%, 15%, 25%,
+35%, 45%, 55%, 70%, 85%, 95% e 100%. Inclui as mensagens de inicialização
+do jogo real, como “Abrindo o jogo” e “Aguardando o jogo”, além das
+etapas usadas na prévia. Cada linha oferece o campo de texto e **Prévia**
+para ver a mensagem naquela porcentagem. **Restaurar textos originais**
+recupera só as mensagens, sem mexer nas posições das camadas.
+
+As mensagens são guardadas junto com as posições no mesmo
+`Games/<ID>/loading_layout.json`, usando a propriedade `stageTexts`.
+As opções existentes **Somente este jogo**, **Padrão para jogos sem layout
+próprio** e **Padrão para todos os jogos** continuam funcionando sem
+perda de configurações. Layouts antigos recebem os textos padrão
+automaticamente; mensagens vazias são restauradas para o original e cada
+mensagem tem limite de 96 caracteres. O modo **Testar loading (10 s)**
+também lê as alterações ainda não salvas, sem executar o jogo.
+
+No editor gráfico, clicar no fundo da tela de composição remove **toda**
+a seleção, inclusive grupos criados por Shift. Nenhuma camada é
+selecionada novamente automaticamente durante a atualização da prévia.
+A seção **Ativar ou desativar camadas** mostra um checkbox para cada
+camada editável; é possível reativar as que já foram ocultadas.
+O checkbox **Camada ativada**, dentro das propriedades da camada
+selecionada, possui a mesma função. O estado de visibilidade é salvo
+junto do layout.

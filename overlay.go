@@ -591,10 +591,10 @@ func (o *overlayState) run() error {
 	o.started = time.Now()
 	o.percent = 0
 	if o.testLoading {
-		o.phase = lp.Stage(0)
+		o.phase = o.stage(0)
 	} else {
 		o.percent = 5
-		o.phase = lp.Stage(5)
+		o.phase = o.stage(5)
 		o.baseline = snapshotPIDs()
 		o.invalidateAll()
 		if err := o.startGame(); err != nil {
@@ -618,6 +618,9 @@ func (o *overlayState) run() error {
     }
     windowsLoop()
 	return nil
+}
+func (o *overlayState) stage(percent int) string {
+    return lp.StageWithTexts(percent,o.layout.StageTexts)
 }
 func (o *overlayState) startGame() error {
 	c := o.cfg
@@ -669,7 +672,7 @@ func (o *overlayState) startGame() error {
 	o.mainExe = execPath
 	o.launchDir = workdir
 	o.percent = 25
-	o.phase = "Abrindo o jogo"
+	o.phase = o.stage(25)
 	o.invalidateAll()
 	if strings.EqualFold(filepath.Ext(execPath), ".lnk") {
 		pid,err:=launchShortcut(execPath,c.Arguments,workdir);if err!=nil{return err};o.launchPID=pid
@@ -685,7 +688,7 @@ func (o *overlayState) startGame() error {
 		_ = cmd.Process.Release()
 	}
 	o.percent = 45
-	o.phase = "Aguardando o jogo abrir"
+	o.phase = o.stage(45)
 	o.started = time.Now()
 	o.invalidateAll()
 	return nil
@@ -889,7 +892,7 @@ func (o *overlayState) tick() {
         if progress!=o.percent {
             o.percent=progress
             if progress==100 && o.completedAt.IsZero(){o.completedAt=now}
-            phase:=lp.Stage(progress)
+            phase:=o.stage(progress)
             if phase!=o.phase {o.phase=phase;o.invalidateAll()
             }else{o.invalidateProgress()}
         }
@@ -944,7 +947,7 @@ func (o *overlayState) tick() {
 			o.targetHWND = candidate
 			o.ready = now
 			o.percent = 70
-			o.phase = lp.Stage(70)
+			o.phase = o.stage(70)
 			o.invalidateAll()
 		}
 		age := now.Sub(o.ready)
@@ -954,7 +957,7 @@ func (o *overlayState) tick() {
 		if hold < time.Second { hold = time.Second }
 		if age >= hold {
 			o.percent = 100
-            o.phase=lp.Stage(100)
+            o.phase=o.stage(100)
             o.completedAt=now
             o.invalidateAll()
             call(pSetForegroundWindow,candidate)
@@ -968,7 +971,7 @@ func (o *overlayState) tick() {
             if raw>=95 {v=95}
 			if v != o.percent {
                 o.percent=v
-                phase:=lp.Stage(v)
+                phase:=o.stage(v)
                 if phase!=o.phase {o.phase=phase;o.invalidateAll()
                 }else{o.invalidateProgress()}
             }
@@ -978,12 +981,12 @@ func (o *overlayState) tick() {
 			o.targetHWND = 0
 			o.ready = time.Time{}
 			o.percent = 55
-			o.phase = lp.Stage(55)
+			o.phase = o.stage(55)
 			o.invalidateAll()
 		}
 		if o.percent < 55 {
 			o.percent = 55
-			o.phase = lp.Stage(55)
+			o.phase = o.stage(55)
 			o.invalidateAll()
 		}
 	}

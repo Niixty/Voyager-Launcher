@@ -155,3 +155,28 @@ func TestHalfPixelCenterCoordinatesSurviveRoundtrip(t *testing.T){
     got:=loaded.Find(Cartridge)
     if got==nil || got.X!=647.5 || got.Y!=244.5 {t.Fatalf("centro perdeu precisão: %+v",got)}
 }
+
+
+func TestCustomStageTextsSurviveLayoutRoundtripAndLegacyMigration(t *testing.T) {
+    initial:=Default()
+    if len(initial.StageTexts)!=10 {t.Fatal("etapas de fábrica ausentes")}
+    initial.StageTexts[1]="Soprando cartucho do meu jeito"
+    initial.StageTexts[2]="Entrando no RetroArch"
+    initial.StageTexts[9]="Vamos jogar!"
+    file:=filepath.Join(t.TempDir(),"custom_stages.json")
+    if err:=Save(file,initial);err!=nil {t.Fatal(err)}
+    got,err:=Load(file)
+    if err!=nil{t.Fatal(err)}
+    for _,index:=range []int{1,2,9}{
+        if got.StageTexts[index]!=initial.StageTexts[index] {t.Fatalf("etapa %d: %q",index,got.StageTexts[index])}
+    }
+    clone:=got.Clone()
+    clone.StageTexts[1]="outro"
+    if got.StageTexts[1]=="outro"{t.Fatal("Clone compartilha o slice de etapas")}
+    legacy:=Default()
+    legacy.StageTexts=nil
+    older:=legacy.Normalize()
+    if len(older.StageTexts)!=10 || older.StageTexts[1]!="Assoprando cartucho..." {
+        t.Fatalf("layout antigo sem etapas customizadas: %+v",older.StageTexts)
+    }
+}

@@ -76,6 +76,37 @@
     const layer = [...document.querySelectorAll(".panel select")].find((select) =>
       [...select.options].some((option) => option.value === "title"),
     );
+    const stage = document.querySelector(".stage");
+    // Clicking an empty area clears selection without clearing any layout.
+    stage.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true, cancelable: true, pointerId: 200,
+    }));
+    if (stage.querySelectorAll(".node.selected").length !== 0 || layer.value !== "")
+      throw Error("Clicar fora das camadas não remove a seleção");
+    if (document.querySelector(".panel .fields input"))
+      throw Error("Propriedades de uma camada ainda aparecem sem seleção");
+    // Every layer must be activatable even when hidden from the canvas.
+    const descriptionSwitch = document.querySelector('.layerToggles [data-layer-id="description"] input');
+    if (!descriptionSwitch) throw Error("Checkbox de ativar camada Descrição ausente");
+    descriptionSwitch.click();
+    if (stage.querySelector('.node[data-id="description"]'))
+      throw Error("Camada Descrição continuou visível após desativar");
+    document.querySelector('.layerToggles [data-layer-id="description"] input').click();
+    if (!stage.querySelector('.node[data-id="description"]'))
+      throw Error("Camada Descrição não reapareceu ao ativar");
+    // The stage editor must cover real-game startup texts AND preview texts.
+    const messages = [...document.querySelectorAll('.stageMessageEditor input[data-stage-index]')];
+    if (messages.length !== 10) throw Error("Editor de etapas não contém as 10 mensagens");
+    const originalText = messages[1].value;
+    if (!originalText.includes("cartucho")) throw Error("Etapas originais não carregadas");
+    set(messages[1], "Soprando cartucho do meu jeito...");
+    messages[1].dispatchEvent(new Event("change", { bubbles: true }));
+    const previewButtons = document.querySelectorAll(".stageMessageEditor button");
+    const previewStage = [...previewButtons].find((button) => button.title.includes("15%"));
+    if (!previewStage) throw Error("Botão de prévia individual da etapa ausente");
+    previewStage.click();
+    if (!document.querySelector(".previewProgress")?.textContent.includes("15%"))
+      throw Error("Prévia da etapa não selecionou a porcentagem correspondente");
     layer.value = "title";
     layer.dispatchEvent(new Event("change", { bubbles: true }));
     if (!document.body.innerText.includes("Cor automática da Hero"))
@@ -117,6 +148,9 @@
     );
     await probe.Progress("saved");
     const saved = await api.Layout("Smoke");
+    if (saved.stageTexts?.length !== 10 || saved.stageTexts[1] !== "Soprando cartucho do meu jeito...") {
+      throw Error("Mensagens personalizadas das etapas não foram salvas no layout");
+    }
     const titleSaved = saved.elements.find((n) => n.id === "title");
     if (titleSaved.color !== "hero")
       throw Error("O Título não foi salvo usando cor automática da Hero");
@@ -129,7 +163,6 @@
     // Shift multi-selection must move all selected layers as a group.
     if ([...layer.options].some((option) => option.value === "heading"))
       throw Error("Camada Mensagem ainda aparece no editor");
-    const stage = document.querySelector(".stage");
     const titleNode = stage.querySelector('.node[data-id="title"]');
     if (!titleNode) throw Error("Camada Título ausente");
     titleNode.dispatchEvent(new PointerEvent("pointerdown", {

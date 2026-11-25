@@ -735,3 +735,73 @@ pre {
   .bp-controls { justify-content: flex-start; }
   .big-picture { padding: 3vh 3vw 2vh; }
 }
+
+
+/* Loading editor: persistent per-layer visibility and configurable stages */
+.layerToggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 13px 15px;
+  margin-top: 12px;
+}
+.layerToggles > strong {
+  flex: 1 0 100%;
+  font-size: 13px;
+}
+.layerToggles > label {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.layerToggles input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+.emptyLayerHint {
+  margin: 13px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.stageMessageEditor {
+  margin-top: 14px;
+  display: grid;
+  gap: 14px;
+}
+.stageMessageEditor h2 { margin: 0; }
+.stageHelp {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.stageMessages { display: grid; gap: 9px; }
+.stageMessageRow {
+  display: grid;
+  grid-template-columns: minmax(165px, 220px) minmax(160px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.stageMessageRow > span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.stageMessageRow > input {
+  min-width: 0;
+  width: 100%;
+}
+.stageMessageRow > button {
+  min-height: 37px;
+  padding: 8px 13px;
+}
+@media (max-width: 760px) {
+  .stageMessageRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+  .stageMessageRow > span { grid-column: 1 / -1; }
+}

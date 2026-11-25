@@ -30,6 +30,7 @@ async function editor(g) {
     outer = el("div", null, "stageScroll"),
     stage = el("div", null, "stage"),
     props = el("section", null, "panel"),
+    stageEditor = el("section", null, "panel stageMessageEditor"),
     layer = el("select");
   const pick = () => doc.elements.find((x) => x.id === sel);
   const selectedNodes = () => doc.elements.filter((x) => selected.has(x.id));
@@ -112,7 +113,7 @@ async function editor(g) {
     btn("Desfazer", () => history(undo, redo)),
     btn("Refazer", () => history(redo, undo)),
   );
-  main.append(controls, outer, props);
+  main.append(controls, outer, props, stageEditor);
   outer.append(stage);
   stage.tabIndex = 0;
   stage.setAttribute("aria-label", "Área de edição, 1600 por 900 pixels");
@@ -205,15 +206,26 @@ async function editor(g) {
   }
   stage.onpointerdown = (e) => {
     const box = e.target.closest(".node");
-    if (!box) return;
+    if (!box) {
+      // Clicking the background, even with Shift held, clears the entire
+      // selection without changing the saved layout or dirty flag.
+      drag = null;
+      if (selected.size || sel) {
+        selected.clear();
+        sel = "";
+        outlines();
+        properties();
+      }
+      return;
+    }
     e.preventDefault();
     stage.focus();
     const id = box.dataset.id;
     // Shift + click toggles elements without starting an accidental drag.
     if (e.shiftKey) {
-      if (selected.has(id) && selected.size > 1) {
+      if (selected.has(id)) {
         selected.delete(id);
-        if (sel === id) sel = [...selected][selected.size - 1];
+        if (sel === id) sel = [...selected].at(-1) || "";
       } else {
         selected.add(id);
         sel = id;
@@ -242,6 +254,16 @@ async function editor(g) {
     outlines();
     properties();
   };
+  outer.addEventListener("pointerdown", (event) => {
+    if (event.target !== outer) return;
+    drag = null;
+    if (selected.size || sel) {
+      selected.clear();
+      sel = "";
+      outlines();
+      properties();
+    }
+  });
   stage.onpointermove = (e) => {
     if (!drag || drag.id !== e.pointerId) return;
     const dx = ((e.clientX - drag.sx) * 1600) / drag.w,
@@ -286,6 +308,7 @@ async function editor(g) {
     refresh();
   };
   function edit(fn) {
+    if (!pick()) return;
     remember();
     fn(pick());
     bounds(pick());
@@ -294,6 +317,9 @@ async function editor(g) {
   function properties() {
     props.replaceChildren();
     layer.replaceChildren();
+    const emptyOption = el("option", "Nenhuma camada selecionada");
+    emptyOption.value = "";
+    layer.append(emptyOption);
     for (const n of [...doc.elements].reverse().filter((x) => x.id !== "progress")) {
       const o = el("option", names[n.id] + (n.visible ? "" : " (oculto)"));
       o.value = n.id;
@@ -308,7 +334,24 @@ async function editor(g) {
     };
     const n = pick(),
       fields = el("div", null, "fields");
-    props.append(field("Camada selecionada", layer), fields);
+    props.append(field("Camada selecionada", layer));
+    const toggles = el("div", null, "layerToggles");
+    toggles.append(el("strong", "Ativar ou desativar camadas"));
+    for (const node of doc.elements.filter((item) => item.id !== "progress")) {
+      const option = check(names[node.id], node.visible, (value) => {
+        remember();
+        node.visible = value;
+        refresh();
+      });
+      option.dataset.layerId = node.id;
+      toggles.append(option);
+    }
+    props.append(toggles);
+    if (!n) {
+      props.append(el("p", "Nenhuma camada selecionada. Clique em uma camada para editar ou marque uma camada acima para exibi-la.", "emptyLayerHint"));
+      return;
+    }
+    props.append(fields);
     props.append(el("small", selected.size > 1
       ? selected.size + " camadas selecionadas — arraste qualquer uma para mover o grupo. Shift + clique para adicionar/remover."
       : "Shift + clique em outras camadas para mover várias juntas."));
@@ -377,7 +420,7 @@ async function editor(g) {
       );
     }
     const tools = row(
-      check("Visível", n.visible, (v) => edit((obj) => (obj.visible = v))),
+      check("Camada ativada", n.visible, (v) => edit((obj) => (obj.visible = v))),
     );
     for (const [d, t] of [
       [-1, "Para trás"],
@@ -455,6 +498,59 @@ async function editor(g) {
     );
     props.append(add(el("div", null, "alignQuick"), heading, hint, axisButtons, anchors));
   }
+  // The ten stage messages live in loading_layout.json so the existing
+  // Save layout scope (game/future/all) also controls their inheritance.
+  const stageDefinitions = [
+    [0, "Inicialização"], [15, "Preparação"], [25, "Iniciando o jogo"],
+    [35, "Ajustes"], [45, "Aguardando abertura"], [55, "Procurando janela"],
+    [70, "Janela identificada"], [85, "Confirmando imagem"],
+    [95, "Finalizando"], [100, "Concluído"],
+  ];
+  const stageInputs = [];
+  stageEditor.append(
+    el("h2", "Editor de etapas"),
+    el("p", "Edite todas as mensagens da abertura. Os textos funcionam no jogo real e no teste de 10 segundos. Salve o layout para guardar as alterações.", "stageHelp"),
+  );
+  const messages = el("div", null, "stageMessages");
+  for (let index = 0; index < stageDefinitions.length; index++) {
+    const [percent, name] = stageDefinitions[index];
+    const entry = el("div", null, "stageMessageRow");
+    const input = inp(doc.stageTexts?.[index] ?? factory.stageTexts?.[index] ?? "");
+    input.maxLength = 96;
+    input.dataset.stageIndex = String(index);
+    input.setAttribute("aria-label", "Mensagem da etapa " + percent + "%");
+    input.onchange = () => {
+      if (!doc.stageTexts) doc.stageTexts = [...factory.stageTexts];
+      if (doc.stageTexts[index] === input.value) return;
+      remember();
+      doc.stageTexts[index] = input.value;
+      refresh();
+    };
+    const preview = btn("Prévia", () => {
+      previewPercent = percent;
+      scrub.value = String(percent);
+      scrubLabel.textContent = "Progresso: " + percent + "%";
+      requestFrame();
+    });
+    preview.title = "Mostrar a mensagem da etapa " + percent + "% no loading";
+    entry.append(el("span", percent + "% · " + name), input, preview);
+    messages.append(entry);
+    stageInputs.push(input);
+  }
+  stageEditor.append(messages, btn("Restaurar textos originais", () => {
+    if (!confirm("Restaurar todas as mensagens das etapas para os textos originais?")) return;
+    remember();
+    doc.stageTexts = [...factory.stageTexts];
+    refresh();
+  }));
+  function syncStageInputs() {
+    for (let index = 0; index < stageInputs.length; index++) {
+      if (document.activeElement !== stageInputs[index]) {
+        stageInputs[index].value = doc.stageTexts?.[index] ?? factory.stageTexts?.[index] ?? "";
+      }
+    }
+  }
+
   let frameTimer;
   function requestFrame() {
     rev++;
@@ -482,10 +578,13 @@ async function editor(g) {
   function refresh() {
     const ids = new Set(doc.elements.map((node) => node.id));
     selected = new Set([...selected].filter((id) => ids.has(id)));
-    if (!selected.size) selected.add(doc.elements[0]?.id || "cartridge");
-    if (!selected.has(sel)) sel = [...selected][0];
+    // Empty selection is intentional; never select the first layer again
+    // when the user clicks the background or disables a layer.
+    if (selected.size && !selected.has(sel)) sel = [...selected][0];
+    if (!selected.size) sel = "";
     outlines();
     properties();
+    syncStageInputs();
     requestFrame();
   }
   function keys(e) {
@@ -498,7 +597,7 @@ async function editor(g) {
       e.preventDefault();
       if (e.key.toLowerCase() === "z") history(undo, redo);
       else history(redo, undo);
-    } else if (e.key.startsWith("Arrow")) {
+    } else if (e.key.startsWith("Arrow") && selected.size) {
       e.preventDefault();
       const v = e.shiftKey ? 10 : 1;
       remember();

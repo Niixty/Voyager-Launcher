@@ -7,6 +7,7 @@ import (
     "math"
     "os"
     "voyager/native/internal/jsonstore"
+    "voyager/native/internal/loadingprogress"
 )
 
 const VirtualWidth = 1600
@@ -47,10 +48,11 @@ type Element struct {
 type Layout struct {
     Version int `json:"version"`
     Elements []Element `json:"elements"`
+    StageTexts []string `json:"stageTexts,omitempty"`
 }
 
 func Default() Layout {
-    return Layout{Version:1, Elements: []Element{
+    return Layout{Version:1,StageTexts:loadingprogress.DefaultTexts(),Elements: []Element{
         {ID:Cartridge,X:165,Y:226,W:305,H:411,Visible:true},
         {ID:Platform,X:526,Y:243,W:810,H:33,FontSize:15,Visible:true,Color:"auto"},
         {ID:Title,X:526,Y:300,W:845,H:120,FontSize:43,Visible:true,Color:"hero"},
@@ -71,6 +73,7 @@ func IsText(id string)bool {return id!=Cartridge && id!=Progress}
 
 func (l Layout) Clone() Layout {
     l.Elements=append([]Element(nil),l.Elements...)
+    l.StageTexts=append([]string(nil),l.StageTexts...)
     return l
 }
 func (l *Layout) Find(id string)*Element {
@@ -119,7 +122,8 @@ func (e *Element) Normalize(){
 }
 func (l Layout) Normalize() Layout {
     defaults:=Default()
-    result:=Layout{Version:1,Elements:make([]Element,0,len(defaults.Elements))}
+    result:=Layout{Version:1,Elements:make([]Element,0,len(defaults.Elements)),
+        StageTexts:loadingprogress.NormalizeTexts(l.StageTexts)}
     seen:=make(map[string]bool)
     for _,node:=range l.Elements {
         if !ValidID(node.ID)||seen[node.ID]{continue}
