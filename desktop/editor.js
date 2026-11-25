@@ -100,8 +100,9 @@ async function editor(g) {
   function bounds(n) {
     n.width = limit(n.width, 16, 1600);
     n.height = limit(n.height, 6, 900);
-    n.x = limit(n.x, 0, 1600 - n.width);
-    n.y = limit(n.y, 0, 900 - n.height);
+    // X/Y may deliberately extend beyond the virtual screen.
+    n.x = limit(n.x, -3200, 3200);
+    n.y = limit(n.y, -3200, 3200);
   }
   function position(node, n) {
     Object.assign(node.style, {
@@ -114,18 +115,25 @@ async function editor(g) {
   let parts = null,
     floating = null,
     raf = 0;
+  let motionY = 0,
+    motionScale = 1,
+    lastAnimationFrame = 0;
   function outlines() {
+    // Retain the animated DOM image to avoid restarting its transform.
+    const previousFloating = floating;
     stage.replaceChildren();
     floating = null;
     if (anim && parts) {
       const n = doc.elements.find((x) => x.id === "cartridge");
       if (n.visible) {
-        floating = el("img");
-        floating.src = parts.sprite || image(g.ID, parts.kind).src;
+        floating = previousFloating || el("img");
+        const source = parts.sprite || image(g.ID, parts.kind).src;
+        if (floating.getAttribute("src") !== source) floating.src = source;
         floating.className = "floating";
-        floating.style.filter = previewPercent >= 95
-          ? "drop-shadow(0 0 16px " + (parts.accent || "#afc9fa") + ")"
-          : "none";
+        const glow = Math.max(0, Math.min(1, previewPercent / 100));
+        const accent = (parts.accent || "#afc9fa").replace("#", "").slice(0, 6);
+        const alpha = Math.round((0.08 + 0.6 * glow ** 1.3) * 255).toString(16).padStart(2, "0");
+        floating.style.filter = "drop-shadow(0 0 " + (4 + 14 * glow).toFixed(1) + "px #" + accent + alpha + ")";
         position(floating, n);
         stage.append(floating);
       }
@@ -211,8 +219,8 @@ async function editor(g) {
       n.y = quant(o.y + dy);
     } else {
       const [right, bottom] = drag.corner.split(",").map(Number);
-      const x = right ? o.x : limit(quant(o.x + dx), 0, o.x + o.width - 16),
-        y = bottom ? o.y : limit(quant(o.y + dy), 0, o.y + o.height - 6);
+      const x = right ? o.x : limit(quant(o.x + dx), -3200, o.x + o.width - 16),
+        y = bottom ? o.y : limit(quant(o.y + dy), -3200, o.y + o.height - 6);
       n.width = right ? quant(o.width + dx) : o.x + o.width - x;
       n.height = bottom ? quant(o.height + dy) : o.y + o.height - y;
       n.x = x;
@@ -249,6 +257,7 @@ async function editor(g) {
     const n = pick(),
       fields = el("div", null, "fields");
     props.append(field("Camada selecionada", layer), fields);
+    props.append(el("small", "Posicionamento livre: X e Y de -3200 a +3200. Valores negativos, como Y = -50, colocam parte do elemento fora da tela."));
     for (const [k, label] of [
       ["x", "X"],
       ["y", "Y"],
@@ -258,6 +267,11 @@ async function editor(g) {
     ]) {
       if (k === "fontSize" && !n.fontSize) continue;
       const i = inp(Math.round(n[k]), "number");
+      if (k === "x" || k === "y") {
+        i.min = -3200;
+        i.max = 3200;
+        i.step = 1;
+      }
       i.onchange = () =>
         edit((obj) => {
           if (i.value !== "")
@@ -432,17 +446,25 @@ async function editor(g) {
   main.onkeydown = keys;
   function float(time) {
     raf = 0;
-    if (page !== serial || !anim) return;
+    if (page !== serial || !anim) {
+      lastAnimationFrame = 0;
+      return;
+    }
+    const dt = lastAnimationFrame ? Math.max(0, Math.min(0.05, (time - lastAnimationFrame) / 1000)) : 1 / 60;
+    lastAnimationFrame = time;
+    const damping = 1 - Math.exp(-dt / 0.14);
+    const finishing = previewPercent >= 95;
+    const heightFactor = stage.clientHeight / 900;
+    const bob = 11 * Math.sin((time / 2900) * 2 * Math.PI) * heightFactor;
+    const elapsed = Math.max(0, time - finalPreviewAt);
+    const u = Math.min(1, elapsed / 460);
+    const pulse = previewPercent === 100 && finalPreviewAt ? Math.sin(Math.PI * u) ** 2 : 0;
+    const desiredY = (finishing ? 0 : bob) - 9 * pulse * heightFactor;
+    const desiredScale = (finishing ? 1.035 : 1) + 0.065 * pulse;
+    motionY += (desiredY - motionY) * damping;
+    motionScale += (desiredScale - motionScale) * damping;
     if (floating) {
-      const finishing = previewPercent >= 95;
-      const elapsed = Math.max(0, time - finalPreviewAt);
-      const jump = previewPercent === 100 && finalPreviewAt
-        ? Math.sin(Math.PI * Math.min(1, elapsed / 440))
-        : 0;
-      const offset = finishing ? -8 * jump
-        : (11 * Math.sin((time / 2900) * 2 * Math.PI) * stage.clientHeight) / 900;
-      const scale = finishing ? (1.035 + 0.075 * jump) : 1;
-      floating.style.transform = "translateY(" + offset + "px) scale(" + scale + ")";
+      floating.style.transform = "translateY(" + motionY.toFixed(3) + "px) scale(" + motionScale.toFixed(5) + ")";
     }
     raf = requestAnimationFrame(float);
   }
@@ -454,6 +476,26 @@ async function editor(g) {
     ],
     "game",
   );
+  let testBusy = false;
+  const testButton = btn("Testar loading (10 s)", async () => {
+    if (testBusy) return;
+    testBusy = true;
+    testButton.disabled = true;
+    testButton.textContent = "Abrindo teste de loading…";
+    const labelTimer = setTimeout(() => {
+      if (testBusy) testButton.textContent = "Teste aberto — Esc para sair";
+    }, 950);
+    try {
+      // Test unsaved layout coordinates without writing to the game files.
+      await api.TestLoading(g.ID, structuredClone(doc));
+      note("Teste de loading encerrado");
+    } finally {
+      clearTimeout(labelTimer);
+      testBusy = false;
+      testButton.disabled = false;
+      testButton.textContent = "Testar loading (10 s)";
+    }
+  });
   main.append(
     row(
       scope,
@@ -481,7 +523,7 @@ async function editor(g) {
         }
       }),
       btn("Print do layout salvo (50%)", () => api.Run(g.ID, "--preview")),
-      btn("Testar loading (10 s)", () => api.Run(g.ID, "--test-loading")),
+      testButton,
     ),
   );
   refresh();

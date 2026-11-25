@@ -293,3 +293,35 @@ a animação está ativa e restaurada quando a tela é fechada. A meta é
 **60 Hz**, mas o FPS real depende do compositor do Windows, da máquina
 e do Moonlight. O teste de loading ainda encerra após 10 segundos ou
 com Esc e mantém o watchdog contra travamentos.
+
+
+### Editor de loading: coordenadas livres e prévia confiável
+
+As posições X e Y podem variar entre **-3200** e **+3200** para todos
+os elementos, incluindo Cartridge, Grid de fallback e textos. Isso
+permite, por exemplo, `Y = -50`, ou mover elementos inteiramente para fora
+dos 1600×900 virtuais. A posição é preservada ao salvar e recarregar
+e também pode ser alterada arrastando o elemento. Os valores de largura
+e altura mantêm seus limites independentes.
+
+O botão **Testar loading (10 s)** agora inicia uma prévia supervisionada
+pelo gerenciador, confirma que a janela fullscreen foi realmente criada e
+aguarda a saída (10 segundos ou Esc), mostrando o estado no próprio botão.
+O teste impede prévias duplicadas e **usa o layout atual do editor**,
+inclusive alterações não salvas, por meio de um arquivo temporário.
+Esse arquivo é removido quando a prévia termina; o layout cadastrado do
+jogo não é alterado pelo teste. Se a janela não abrir, o processo de teste
+é encerrado e o erro fica visível no aplicativo.
+
+### Final do cartucho sem mudança brusca de tamanho
+
+A partir de 95%, a posição e o tamanho do Cartucho/Grid são interpolados
+a partir do último quadro do movimento vertical, com *smoothstep* e sem
+mudanças instantâneas. Ao completar 100%, a confirmação usa um pequeno
+salto/ampliação de pulso (`sin²`) com início e fim de velocidade zero.
+Se a detecção da janela do jogo recuar para uma etapa anterior, o estado
+da animação final é reiniciado para evitar saltos ao voltar a 95%.
+
+A mesma suavização foi aplicada à prévia animada no editor WebView2: o
+elemento visual não é recriado a cada mudança de porcentagem, e as
+transformações são interpoladas continuamente com `requestAnimationFrame`.

@@ -21,6 +21,7 @@ import (
 	"voyager/native/internal/appearance"
 	"voyager/native/internal/heroaccent"
 	ll "voyager/native/internal/loadinglayout"
+    "voyager/native/internal/loadingmotion"
 )
 
 // Native Win32 overlay. No PowerShell, Windows Forms, browser or .NET runtime.
@@ -402,26 +403,28 @@ func (o *overlayState) cartridgeOffset() float64 {
 
 // The floating icon settles smoothly at 95% and celebrates 100% with a short hop.
 func (o *overlayState) loadingMotion(now time.Time) (float64,float64) {
- if o==nil{return 0,1}
- if o.percent<95 {
-  if !appPrefs.AnimateCartridge{return 0,1}
-  return o.cartridgeOffset(),1
- }
- if o.lockAt.IsZero() {
-  o.lockAt=now
-  o.lockOffset=o.cartridgeOffset()
- }
- t:=math.Min(1,math.Max(0,now.Sub(o.lockAt).Seconds()/.24))
- eased:=t*t*(3-2*t)
- offset:=o.lockOffset*(1-eased)
- scale:=1.035
- if !o.completedAt.IsZero() {
-  u:=math.Min(1,math.Max(0,now.Sub(o.completedAt).Seconds()/.44))
-  jump:=math.Sin(math.Pi*u)
-  offset-=9*jump
-  scale=1.035+0.075*jump
- }
- return offset,scale
+    if o==nil{return 0,1}
+    if o.percent<95 {
+        // A game can temporarily lose its detected window and go back to
+        // the floating phase. Reset the finish state, or the next 95% step
+        // would snap to an old completed position.
+        o.lockAt=time.Time{}
+        o.lockOffset=0
+        o.completedAt=time.Time{}
+        if !appPrefs.AnimateCartridge{return 0,1}
+        return o.cartridgeOffset(),1
+    }
+    if o.lockAt.IsZero() {
+        // Keep the very last bobbing position, even when percent crosses
+        // 95% between two displayed frames.
+        o.lockAt=now
+        o.lockOffset=o.cartridgeOffset()
+    }
+    pose:=loadingmotion.Settle(o.lockOffset,now.Sub(o.lockAt).Seconds())
+    if !o.completedAt.IsZero() {
+        pose=loadingmotion.Celebrate(pose,now.Sub(o.completedAt).Seconds())
+    }
+    return pose.Offset,pose.Scale
 }
 
 func (o *overlayState) stop() {
@@ -527,6 +530,15 @@ func (o *overlayState) startTestWatchdog() func(){
 
 func (o *overlayState) run() error {
 	o.layout,_ = loadEffectiveLoadingLayout(o.id)
+    if o.testLoading {
+        // The editor may preview unsaved positions without modifying the
+        // saved layout on disk. Only the dedicated preview process reads this.
+        if path:=os.Getenv("VOYAGER_TEST_LAYOUT");path!="" {
+            previewLayout,err:=ll.Load(path)
+            if err!=nil{return fmt.Errorf("layout temporário: %w",err)}
+            o.layout=previewLayout
+        }
+    }
 	overlay = o
 	defer func() {
 		if o.frameStop != nil {

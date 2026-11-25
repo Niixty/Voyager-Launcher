@@ -12,6 +12,12 @@ import (
 const VirtualWidth = 1600
 const VirtualHeight = 900
 
+// Layout coordinates may deliberately extend beyond the visible viewport.
+// Keep finite safety limits, but never pull deliberately negative positions
+// back onto the 1600×900 composition during save/load normalization.
+const PositionMin = -3200
+const PositionMax = 3200
+
 const (
     Cartridge = "cartridge"
     Platform = "platform"
@@ -94,8 +100,8 @@ func Snap(v float64,grid float64)float64 {
 func (e *Element) Normalize(){
     e.W=clamp(e.W,16,1600)
     e.H=clamp(e.H,6,900)
-    e.X=clamp(e.X,0,VirtualWidth-e.W)
-    e.Y=clamp(e.Y,0,VirtualHeight-e.H)
+    e.X=clamp(e.X,PositionMin,PositionMax)
+    e.Y=clamp(e.Y,PositionMin,PositionMax)
     e.FontSize=float32(clamp(float64(e.FontSize),9,90))
     if !IsText(e.ID) {
         e.FontSize=0

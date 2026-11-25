@@ -86,10 +86,24 @@
     const anchors = document.querySelectorAll(".anchorPresets button");
     if (anchors.length !== 9) throw Error("Atalhos de posição ausentes");
     const props = document.querySelector(".panel .fields input");
-    set(props, "240");
+    set(props, "-50");
     props.dispatchEvent(new Event("change"));
     click("Desfazer");
     click("Refazer");
+
+    // X/Y outside 1600×900 must remain editable and survive save/load.
+    layer.value = "cartridge";
+    layer.dispatchEvent(new Event("change", { bubbles: true }));
+    const cartridgeFields = document.querySelectorAll(".panel .fields input");
+    const cartridgeY = cartridgeFields[1];
+    if (!cartridgeY || cartridgeY.min !== "-3200")
+      throw Error("Campo Y do Cartucho não aceita valores negativos");
+    set(cartridgeY, "-50");
+    cartridgeY.dispatchEvent(new Event("change", { bubbles: true }));
+    if (typeof api.TestLoading !== "function")
+      throw Error("Método TestLoading não registrado na interface Wails");
+    if (![...document.querySelectorAll("button")].some(b => b.textContent === "Testar loading (10 s)"))
+      throw Error("Botão Testar loading ausente");
     click("Salvar layout");
     await wait(
       () => document.querySelector("#notice").textContent === "Layout salvo",
@@ -100,6 +114,8 @@
     if (titleSaved.textAlign !== "right" || titleSaved.verticalAlign !== "bottom") {
       throw Error("Alinhamento não persistido no layout");
     }
+    if (titleSaved.x !== -50 || saved.elements.find(n => n.id === "cartridge").y !== -50)
+      throw Error("Coordenadas negativas foram perdidas ao salvar o layout");
     await probe.Capture("editor");
     click("Configurações");
     await wait(() => heading("Configurações"), "Configurações");

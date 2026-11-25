@@ -384,6 +384,12 @@ pre {
   pointer-events: none;
   object-fit: contain;
 }
+.floating {
+  /* Keep the icon on the compositor while the editor receives new sprites. */
+  transform-origin: center center;
+  will-change: transform, filter;
+  backface-visibility: hidden;
+}
 .foreground {
   inset: 0;
   width: 100%;

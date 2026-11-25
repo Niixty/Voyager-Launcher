@@ -36,7 +36,7 @@ func TestClampAndFallback(t *testing.T){
  l.Find(Phase).Color="bad-value"
  n:=l.Normalize()
  title:=n.Find(Title)
- if title.X<0 || title.W>1600 || title.FontSize>90 || title.H<=0 {t.Fatal(title)}
+ if title.X!=-100 || title.W>1600 || title.FontSize>90 || title.H<=0 {t.Fatal(title)}
  if n.Find(Phase).Color!="auto" {t.Fatal("bad color")}
  if Snap(46,10)!=50 || Snap(44,10)!=40 {t.Fatal("snap")}
 }
@@ -76,4 +76,36 @@ func TestUnknownElementsIgnored(t *testing.T){
  l.Elements=append(l.Elements,Element{ID:"bad",X:10,Y:10,W:100,H:100,Visible:true})
  l.Elements=append(l.Elements,l.Elements[0])
  if len(l.Normalize().Elements)!=8 {t.Fatal("unknown or duplicate not discarded")}
+}
+
+
+func TestOffscreenCoordinatesRoundtrip(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"loading_layout.json")
+ l:=Default()
+ l.Find(Cartridge).Y=-50
+ l.Find(Cartridge).X=-200
+ l.Find(Title).X=1740
+ l.Find(Description).Y=995
+ l.Find(Phase).Y=-120
+ if err:=Save(path,l);err!=nil{t.Fatal(err)}
+ loaded,err:=Load(path)
+ if err!=nil{t.Fatal(err)}
+ for _,item:=range []struct{ID string;X,Y float64}{
+    {Cartridge,-200,-50},
+    {Title,1740,300},
+    {Description,526,995},
+    {Phase,526,-120},
+ } {
+    element:=loaded.Find(item.ID)
+    if element==nil || element.X!=item.X || element.Y!=item.Y {
+        t.Fatalf("invalid off-screen persistence for %s: %+v",item.ID,element)
+    }
+ }
+}
+func TestPositionSafetyLimits(t *testing.T){
+ l:=Default()
+ l.Find(Cartridge).X=-90000
+ l.Find(Title).Y=90000
+ normalized:=l.Normalize()
+ if normalized.Find(Cartridge).X!=PositionMin || normalized.Find(Title).Y!=PositionMax {t.Fatal(normalized)}
 }
