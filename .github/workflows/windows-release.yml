@@ -34,6 +34,25 @@ jobs:
       - name: Preparar icone do aplicativo
         shell: pwsh
         run: |
+          # Protege todas as resoluções originais do autor; o Windows usa o
+          # recurso adequado para menu Iniciar, barra de tarefas e atalhos.
+          $bytes = [System.IO.File]::ReadAllBytes("app/assets/VoyagerLauncher.ico")
+          if ($bytes.Length -lt 5000) { throw "ICO inválido ou de baixa resolução" }
+          if ([BitConverter]::ToUInt16($bytes,0) -ne 0 -or [BitConverter]::ToUInt16($bytes,2) -ne 1) { throw "Cabeçalho do ICO inválido" }
+          $count = [BitConverter]::ToUInt16($bytes,4)
+          if ($count -ne 8) { throw "Ícone precisa conter as oito resoluções originais; encontrou $count" }
+          $sizes = @()
+          for ($i=0; $i -lt $count; $i++) {
+            $width = [int]$bytes[6+16*$i]
+            $height = [int]$bytes[7+16*$i]
+            if ($width -eq 0) { $width = 256 }
+            if ($height -eq 0) { $height = 256 }
+            if ($width -ne $height) { throw "Resolução não quadrada no ICO: $width x $height" }
+            $sizes += $width
+          }
+          $expected = @(16,24,32,48,64,96,128,256)
+          if (Compare-Object ($sizes | Sort-Object) $expected) { throw "Faltam resoluções do ícone: $($sizes -join ', ')" }
+          Write-Host "Ícone Voyager validado: $($sizes -join ', ') px"
           # Rsrc transforma o ICO versionado no Git em recurso Windows embutido no EXE.
           go install github.com/akavel/rsrc@v0.10.2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
