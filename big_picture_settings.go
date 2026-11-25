@@ -21,7 +21,8 @@ type BigPictureOptions struct {
     ScrollDirection string `json:"scrollDirection"` // vertical | horizontal
     Columns int `json:"columns"` // columns visible per page (1..8)
     Rows int `json:"rows"` // rows visible per page (1..4)
-    IconSize int `json:"iconSize"` // image scale percentage (60..140)
+    IconSize int `json:"iconSize"` // displayed scale (80..180), 100%=old 80%
+    CartridgeSpacing int `json:"cartridgeSpacing"` // gap in px (0..48)
     ShowTitle bool `json:"showTitle"`
     ShowPlatform bool `json:"showPlatform"`
     BlurBackground bool `json:"blurBackground"`
@@ -30,7 +31,7 @@ type BigPictureOptions struct {
 func defaultBigPictureOptions() BigPictureOptions {
     return BigPictureOptions{
         View:"grid",Background:"hero",ButtonStyle:"auto",ShowTitle:true,ShowPlatform:true,
-        BlurBackground:true,Dim:65,ScrollDirection:"vertical",Columns:4,Rows:2,IconSize:100,
+        BlurBackground:true,Dim:65,ScrollDirection:"vertical",Columns:4,Rows:2,IconSize:100,CartridgeSpacing:24,
     }
 }
 func (o BigPictureOptions) normalized() BigPictureOptions {
@@ -43,9 +44,12 @@ func (o BigPictureOptions) normalized() BigPictureOptions {
     if o.Rows<=0 {o.Rows=2}
     if o.Rows>4 {o.Rows=4}
     if o.IconSize<=0 {o.IconSize=100}
-    if o.IconSize<60 {o.IconSize=60}
-    if o.IconSize>140 {o.IconSize=140}
+    if o.IconSize<80 {o.IconSize=80}
+    if o.IconSize>180 {o.IconSize=180}
     o.IconSize=(o.IconSize+5)/10*10
+    if o.CartridgeSpacing<0 {o.CartridgeSpacing=0}
+    if o.CartridgeSpacing>48 {o.CartridgeSpacing=48}
+    o.CartridgeSpacing=(o.CartridgeSpacing+2)/4*4
     if o.Dim<10 {o.Dim=10}
     if o.Dim>90 {o.Dim=90}
     return o

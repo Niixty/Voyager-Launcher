@@ -662,7 +662,8 @@ pre {
   letter-spacing: .13em;
   font-size: clamp(10px, .8vw, 14px);
   font-weight: 650;
-  color: var(--accent);
+  color: var(--bp-heading-accent, var(--accent));
+  transition: color 260ms ease;
 }
 .bp-heading h1 { margin: 3px 0 0; }
 .bp-header-actions {
@@ -896,7 +897,17 @@ pre {
   transition: opacity 780ms ease-in-out;
   overflow: hidden;
   pointer-events: none;
-  /* The optional per-game palette recolors the full waves and surface. */
+}
+.big-picture.bp-default-background .bp-default-waves { opacity: 1; }
+/* Double-buffer the COMPLETE animated backdrop. Each incoming color applies
+   instantly to its hidden scene; the only color animation is a single opacity
+   crossfade over the background and every lower/upper wave at once. */
+.bp-wave-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 260ms ease-in-out;
   background:
     radial-gradient(ellipse at 75% 28%, var(--bp-wave-light, #102f60), transparent 56%),
     linear-gradient(135deg,
@@ -904,13 +915,14 @@ pre {
       var(--bp-wave-mid, #081b3d) 48%,
       var(--bp-wave-deep, #030a1a) 100%);
 }
-.big-picture.bp-default-background .bp-default-waves { opacity: 1; }
+.bp-wave-scene.is-active { opacity: 1; }
 .bp-waves-svg {
   display: block;
   width: 100%;
   height: 100%;
   filter: hue-rotate(var(--bp-wave-hue-shift, 0deg));
-  transition: filter 650ms ease-in-out;
+  /* No hue interpolation: it used to create transient green waves. */
+  transition: none;
 }
 .bp-wave-path { pointer-events: none; }
 .bp-wave-drift {
@@ -1004,6 +1016,10 @@ pre {
   overscroll-behavior: contain;
   scroll-behavior: smooth;
 }
+/* Adjustable cartridge-to-cartridge spacing in both scroll orientations. */
+.big-picture.bp-cartridges .bp-grid {
+  --bp-layout-gap: var(--bp-cartridge-spacing, 24px);
+}
 .big-picture .bp-grid::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -1041,7 +1057,7 @@ pre {
   aspect-ratio: auto;
   justify-self: center;
   align-self: center;
-  transform: scale(var(--bp-icon-scale, 1));
+  transform: scale(var(--bp-icon-scale, .8));
   transform-origin: center;
   transition: transform 430ms cubic-bezier(.2, .8, .2, 1);
   will-change: transform;
@@ -1082,14 +1098,14 @@ pre {
 /* Subtle focus lift (5.5%) and only a 7px separation of its side neighbors.
    Transition the artwork instead of the whole grid to avoid relayout jumps. */
 .big-picture.bp-cartridges .bp-grid .bp-card.selected .bp-cover {
-  transform: scale(var(--bp-selected-scale, 1.055));
+  transform: scale(var(--bp-selected-scale, .844));
   z-index: 2;
 }
 .big-picture.bp-cartridges .bp-grid .bp-card.bp-neighbor-left .bp-cover {
-  transform: translate3d(-7px, 0, 0) scale(var(--bp-icon-scale, 1));
+  transform: translate3d(-7px, 0, 0) scale(var(--bp-icon-scale, .8));
 }
 .big-picture.bp-cartridges .bp-grid .bp-card.bp-neighbor-right .bp-cover {
-  transform: translate3d(7px, 0, 0) scale(var(--bp-icon-scale, 1));
+  transform: translate3d(7px, 0, 0) scale(var(--bp-icon-scale, .8));
 }
 .bp-cartridges .bp-cover img {
   object-fit: contain;
@@ -1210,6 +1226,8 @@ pre {
   .bp-cartridges .bp-cover img,
   .bp-hero-layer,
   .bp-default-waves,
+  .bp-wave-scene,
+  .bp-heading small,
   .bp-hero-background::after { transition: none !important; }
   .bp-wave-drift { animation: none !important; will-change: auto; }
 }
