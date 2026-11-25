@@ -211,6 +211,7 @@ var (
 	pSetCapture                  = u32.NewProc("SetCapture")
 	pReleaseCapture              = u32.NewProc("ReleaseCapture")
 	pGetKeyState                 = u32.NewProc("GetKeyState")
+    pGetAsyncKeyState            = u32.NewProc("GetAsyncKeyState")
 	pSetForegroundWindow         = u32.NewProc("SetForegroundWindow")
 	pPostMessage                 = u32.NewProc("PostMessageW")
 	pSetWindowLongPtr            = u32.NewProc("SetWindowLongPtrW")

@@ -26,7 +26,8 @@ type overlayBackbuffer struct {
     source *image.NRGBA
     glowRadius, spritePercent int
     spriteFailed bool
-    alphaFrames [4]overlayAlphaFrame
+    alphaFrames [3]overlayAlphaFrame
+    haloFrame overlayAlphaFrame
     alphaReady bool
     x, w, h int
     baseY, scale float64
@@ -56,6 +57,7 @@ func (b *overlayBackbuffer) release() {
     b.sprite.close()
     b.foreground.close()
     b.halo.close()
+    b.haloFrame.release()
     for i:=range b.alphaFrames {b.alphaFrames[i].release()}
     if b.staticDC!=0 {
         call(pSelectObject,b.staticDC,b.staticPrevious)
@@ -178,7 +180,14 @@ func (b *overlayBackbuffer) prepareSprite(o *overlayState) {
     }
     b.source=source
     accent:=loadingAccent(o.accent,false)
-    if glow,e:=loadingBitmap(loadingprogress.Halo(source,radius,accent));e==nil {b.halo=glow}
+    if glow,e:=loadingBitmap(loadingprogress.Halo(source,radius,accent));e==nil {
+        b.halo=glow
+        // Pre-render the silhouette glow once; Win32 AlphaBlend will vary
+        // only opacity each frame, instead of creating GDI+ image contexts.
+        if frame,ok:=rasterizedAlphaFrame(glow,glow.W,glow.H,0);ok {
+            b.haloFrame=frame
+        }
+    }
     b.spritePercent=-1
     b.updateSprite(o)
 }
@@ -292,14 +301,26 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
         drawX:=float64(b.x)-(drawW-float64(b.w))/2
         drawY:=position-(drawH-float64(b.h))/2
         bits:=func(v float64)uintptr{return uintptr(math.Float32bits(float32(v)))}
-        if b.halo!=nil && o.percent>=95 {
-            p:=paintFromHDC(b.dc)
+        if b.halo!=nil {
+            // Start with a barely visible glow at 0% and increase it
+            // continuously. The alpha mask follows the PNG silhouette.
+            amount:=math.Max(0,math.Min(1,float64(o.percent)/100))
+            alpha:=int(22+210*math.Pow(amount,1.35))
+            if alpha>255 {alpha=255}
             radius:=float64(b.glowRadius)*scale
-            haloX,haloY:=drawX-radius,drawY-radius
-            haloW,haloH:=drawW+2*radius,drawH+2*radius
-            call(drawImageFloat,p.g,b.halo.handle,bits(haloX),bits(haloY),bits(haloW),bits(haloH))
-            if o.percent==100 {call(drawImageFloat,p.g,b.halo.handle,bits(haloX),bits(haloY),bits(haloW),bits(haloH))}
-            p.close()
+            gx:=int(math.Round(drawX-radius))
+            gy:=int(math.Round(drawY-radius))
+            gw:=int(math.Max(1,math.Round(drawW+2*radius)))
+            gh:=int(math.Max(1,math.Round(drawH+2*radius)))
+            if b.haloFrame.dc!=0 {
+                blend:=uintptr(0x01000000|uint32(alpha)<<16)
+                call(alphaBlend,b.dc,uintptr(gx),uintptr(gy-1),uintptr(gw),uintptr(gh+2),
+                    b.haloFrame.dc,0,0,uintptr(b.halo.W),uintptr(b.halo.H+2),blend)
+            } else {
+                p:=paintFromHDC(b.dc)
+                call(drawImageFloat,p.g,b.halo.handle,bits(float64(gx)),bits(float64(gy)),bits(float64(gw)),bits(float64(gh)))
+                p.close()
+            }
         }
         usedFastPath:=false
         if b.alphaReady && scale==1 {

@@ -9,42 +9,42 @@ import (
 // Blend shades only existing image pixels. Transparent pixels (including holes)
 // remain untouched. The tinted region advances horizontally from left to right.
 func Blend(src *image.NRGBA, percent int, accent color.NRGBA) *image.NRGBA {
-	if src == nil { return nil }
-	w,h:=src.Rect.Dx(),src.Rect.Dy()
-	dst:=image.NewNRGBA(image.Rect(0,0,w,h))
-	copy(dst.Pix,src.Pix)
-	p:=math.Max(0,math.Min(100,float64(percent)))/100
-	fill:=int(math.Round(float64(w)*p))
-	if p==0 { fill=0 }
-	brightness:=0.79 + 0.17*p
-	if p>=0.95 { brightness+=0.09*(p-0.95)/0.05 }
-	strength:=0.13+0.14*p
-	if p>=0.95 { strength+=0.045 }
-	for y:=0;y<h;y++ {
-		for x:=0;x<w;x++ {
-			i:=y*dst.Stride+x*4
-			if src.Pix[i+3]==0 {continue}
-			on:=x<fill
-			b:=brightness
-			tint:=0.0
-			if on {
-				b+=0.06+0.045*p
-				tint=strength
-			} else {
-				b-=0.05*(1-p)
-			}
-			for c:=0;c<3;c++ {
-				value:=float64(src.Pix[i+c])*b
-				if tint>0 {
-					var channel uint8
-					switch c {case 0:channel=accent.R;case 1:channel=accent.G;default:channel=accent.B}
-					value=value*(1-tint)+float64(channel)*tint
-				}
-				dst.Pix[i+c]=uint8(math.Max(0,math.Min(255,math.Round(value))))
-			}
-		}
-	}
-	return dst
+    if src == nil {return nil}
+    w,h:=src.Rect.Dx(),src.Rect.Dy()
+    dst:=image.NewNRGBA(image.Rect(0,0,w,h))
+    copy(dst.Pix,src.Pix)
+    p:=math.Max(0,math.Min(100,float64(percent)))/100
+    // Gradient centered at the advancing boundary. At exactly 0% and 100%
+    // the image is entirely darkened / entirely colored, respectively.
+    edge:=p*float64(w)
+    feather:=math.Max(12,math.Min(96,float64(w)*0.12))
+    brightness:=0.79+0.17*p
+    if p>=0.95{brightness+=0.09*(p-0.95)/0.05}
+    strength:=0.13+0.14*p
+    if p>=0.95{strength+=0.045}
+    for y:=0;y<h;y++ {
+        for x:=0;x<w;x++ {
+            i:=y*dst.Stride+x*4
+            if src.Pix[i+3]==0 {continue}
+            mix:=0.0
+            if p>=1 {mix=1} else if p>0 {
+                mix=math.Max(0,math.Min(1,(edge+feather*0.5-float64(x)-0.5)/feather))
+                mix=mix*mix*(3-2*mix) // smoothstep, no hard vertical cut
+            }
+            bright:=brightness-0.05*(1-p)+mix*(0.11+0.045*p)
+            tint:=strength*mix
+            for c:=0;c<3;c++ {
+                value:=float64(src.Pix[i+c])*bright
+                if tint>0 {
+                    var channel uint8
+                    switch c{case 0:channel=accent.R;case 1:channel=accent.G;default:channel=accent.B}
+                    value=value*(1-tint)+float64(channel)*tint
+                }
+                dst.Pix[i+c]=uint8(math.Max(0,math.Min(255,math.Round(value))))
+            }
+        }
+    }
+    return dst
 }
 
 // Halo blurs the source silhouette, not its rectangular PNG bounds.

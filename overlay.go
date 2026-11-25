@@ -39,6 +39,7 @@ type overlayState struct {
 	lockOffset                         float64
 	frameStop                          chan struct{}
 	framePending                       atomic.Bool
+    tickPending                        atomic.Bool
 	windows                            []uintptr
 	cartridge, background              *img
 	accent                             uint32
@@ -79,6 +80,7 @@ var enumGameWindowCallback = syscall.NewCallback(func(hwnd, param uintptr) uintp
 })
 const (
 	wmVoyagerFrame = 0x8002
+    wmVoyagerTick  = 0x8003
 	loadingTestDuration = 10 * time.Second
 )
 
@@ -102,12 +104,24 @@ func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 			overlay.invalidateMotion()
 		}
 		return 0
-	case WM_TIMER:
-		if overlay != nil && len(overlay.windows) > 0 && hwnd == overlay.windows[0] {
-			overlay.tick()
-		}
-		return 0
+    case wmVoyagerTick:
+        if overlay!=nil && len(overlay.windows)>0 && hwnd==overlay.windows[0] {
+            overlay.tickPending.Store(false)
+            overlay.tick()
+        }
+        return 0
+    case WM_TIMER:
+        // A low-priority WM_TIMER is only a backup; it can starve while
+        // WM_PAINT/WM_APP traffic is continuous, which froze the 10 s preview.
+        if overlay!=nil && len(overlay.windows)>0 && hwnd==overlay.windows[0]{
+            overlay.tick()
+        }
+        return 0
 	case WM_CLOSE:
+        if overlay!=nil && len(overlay.windows)>0 && hwnd==overlay.windows[0] {
+            overlay.stop()
+            return 0
+        }
 		call(pDestroyWindow, hwnd)
 		return 0
 	case WM_DESTROY:
@@ -426,32 +440,78 @@ func (o *overlayState) invalidateAll() {
 // At most one pending frame is queued, so slow painting drops work instead
 // of accumulating latency.
 func (o *overlayState) startFrameClock() {
-	if !appPrefs.AnimateCartridge || o.cartridge == nil {
-		return
-	}
-	n := o.layout.Find(ll.Cartridge)
-	if n == nil || !n.Visible {
-		return
-	}
-	o.frameStop = make(chan struct{})
-	stop := o.frameStop
-	hwnd := o.windows[0]
-	go func() {
-		ticker := time.NewTicker(time.Second / 60)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-ticker.C:
-				if !o.framePending.Swap(true) {
-					if call(pPostMessage, hwnd, wmVoyagerFrame, 0, 0) == 0 {
-						o.framePending.Store(false)
-					}
-				}
-			}
-		}
-	}()
+    if len(o.windows)==0{return}
+    o.frameStop=make(chan struct{})
+    stop:=o.frameStop
+    hwnd:=o.windows[0]
+    hasSprite:=false
+    if appPrefs.AnimateCartridge && o.cartridge!=nil {
+        if n:=o.layout.Find(ll.Cartridge);n!=nil&&n.Visible {hasSprite=true}
+    }
+    // Business logic must not depend on WM_TIMER: Windows dispatches WM_TIMER
+    // only when the queue is idle, which can starve during heavy rendering.
+    go func(){
+        tickTicker:=time.NewTicker(50*time.Millisecond)
+        defer tickTicker.Stop()
+        var motionTicker *time.Ticker
+        var frames <-chan time.Time
+        if hasSprite {
+            motionTicker=time.NewTicker(time.Second/60)
+            frames=motionTicker.C
+            defer motionTicker.Stop()
+        }
+        for{
+            select{
+            case <-stop:return
+            case <-tickTicker.C:
+                if !o.tickPending.Swap(true) {
+                    if call(pPostMessage,hwnd,wmVoyagerTick,0,0)==0 {
+                        o.tickPending.Store(false)
+                    }
+                }
+            case <-frames:
+                if !o.framePending.Swap(true) {
+                    if call(pPostMessage,hwnd,wmVoyagerFrame,0,0)==0 {
+                        o.framePending.Store(false)
+                    }
+                }
+            }
+        }
+    }()
+}
+
+// The preview runs in its own dedicated EXE process. GetAsyncKeyState works
+// even though the fullscreen overlay intentionally does not take focus, and
+// the independent watchdog closes that process if Win32's paint loop stalls.
+func (o *overlayState) startTestWatchdog() func(){
+    done:=make(chan struct{})
+    hwnd:=o.windows[0]
+    deadline:=o.started.Add(loadingTestDuration)
+    go func(){
+        ticker:=time.NewTicker(32*time.Millisecond)
+        defer ticker.Stop()
+        for{
+            select{
+            case <-done:return
+            case <-ticker.C:
+                escDown:=call(pGetAsyncKeyState,VK_ESCAPE)&0x8000!=0
+                if !escDown && time.Now().Before(deadline){continue}
+                // Prefer normal WM_CLOSE and GDI cleanup on the UI thread.
+                call(pPostMessage,hwnd,WM_CLOSE,0,0)
+                watchdog:=time.NewTimer(800*time.Millisecond)
+                select{
+                case <-done:
+                    watchdog.Stop()
+                    return
+                case <-watchdog.C:
+                    // Safety escape hatch: never leave an unresponsive,
+                    // topmost fullscreen preview blocking the entire PC.
+                    os.Exit(0)
+                }
+            }
+        }
+    }()
+    return func(){close(done)}
 }
 
 func (o *overlayState) run() error {
@@ -498,7 +558,8 @@ func (o *overlayState) run() error {
 		o.windows = append(o.windows, h)
 		call(pSetLayeredWindowAttributes, h, 0, 255, LWA_ALPHA)
 		show(h, SW_SHOW)
-		call(pUpdateWindow, h)
+        // Do not force synchronous first-frame GDI drawing before the
+        // preview watchdog is running. WM_PAINT follows in the message loop.
 	}
 	if len(o.windows) == 0 {
 		return winError("não foi possível criar tela cheia")
@@ -523,9 +584,15 @@ func (o *overlayState) run() error {
 	// The first UpdateWindow happens before test state is initialized.
 	o.invalidateAll()
 	// Detect the game and handle the fade separately from the animation.
-	call(pSetTimer, o.windows[0], 1, 50, 0)
-	o.startFrameClock()
-	windowsLoop()
+    // WM_TIMER is a backup; wmVoyagerTick drives reliable progress and
+    // shutdown even when the paint queue never becomes idle.
+    call(pSetTimer,o.windows[0],1,250,0)
+    o.startFrameClock()
+    if o.testLoading {
+        cancelWatchdog:=o.startTestWatchdog()
+        defer cancelWatchdog()
+    }
+    windowsLoop()
 	return nil
 }
 func (o *overlayState) startGame() error {
@@ -789,7 +856,12 @@ func (o *overlayState) tick() {
 	if o.testLoading {
         elapsed:=now.Sub(o.started)
         if elapsed>=loadingTestDuration {o.stop();return}
-        progress:=int(math.Min(100,elapsed.Seconds()/9.1*100))
+        raw:=int(math.Min(100,elapsed.Seconds()/9.1*100))
+        // Updating one ARGB sprite every pixel-percent overwhelms GDI+ on
+        // some GPUs. A feathered edge makes 4% visual steps unobtrusive.
+        progress:=raw/4*4
+        if raw>=95 {progress=95}
+        if raw>=100 {progress=100}
         if progress!=o.percent {
             o.percent=progress
             if progress==100 && o.completedAt.IsZero(){o.completedAt=now}
@@ -862,10 +934,12 @@ func (o *overlayState) tick() {
             call(pSetForegroundWindow,candidate)
             o.fadeAt=now
 		} else {
-			v := 70 + int(age.Seconds()/hold.Seconds()*25)
-			if v > 95 {
-				v = 95
-			}
+			raw:=70+int(age.Seconds()/hold.Seconds()*25)
+            if raw>95 {raw=95}
+            // Recolor the icon at most once for every four progress points;
+            // motion continues at display refresh rate between these steps.
+            v:=70+((raw-70)/4)*4
+            if raw>=95 {v=95}
 			if v != o.percent {
 				o.percent = v
 				o.phase = "Confirmando imagem do jogo"

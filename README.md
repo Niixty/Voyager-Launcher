@@ -240,3 +240,33 @@ O Big Picture mostra ícones para **Navegar**, **Iniciar jogo** e **Voltar**,
 detectando automaticamente os controles PlayStation DualShock/DualSense e
 usando Xbox para os demais controles compatíveis. Tudo funciona offline.
 Créditos e licença CC BY-SA 4.0: `desktop/controller-icons/LICENSE.md`.
+
+
+### Estabilidade do loading e saída segura da prévia
+
+A prévia de 10 segundos usa um relógio dedicado para atualizar o progresso,
+independente das mensagens `WM_TIMER` que podem atrasar quando o Windows
+está renderizando. A tecla **Esc** funciona mesmo se o overlay em tela cheia
+não estiver com foco. Um *watchdog* no processo isolado do teste fecha a
+janela ao completar 10 segundos e força o encerramento desse processo
+caso o renderizador não responda. Isso não mata nem abre o jogo.
+
+O processamento do cartucho/Grid preserva a transparência original do PNG,
+agora com borda de preenchimento suavizada por *smoothstep*, sem linha
+vertical de corte seco. Um halo seguindo a silhueta começa discreto em
+0% e aumenta de intensidade continuamente até 100%. O desenho reaproveita
+bitmaps em memória, com menos reconstruções GDI+ por alteração de progresso.
+
+### Sincronização de Git sem janelas de terminal
+
+A tarefa `Voyager-Git-Sync`, criada por `ATIVAR-SINCRONIZACAO.cmd`,
+agora usa o host **WScript.exe** com o arquivo
+`tools/Sincronizar-Git-Silencioso.vbs` e roda o PowerShell sem criar
+um console visível sobre jogos. O Voyager também tenta converter
+silenciosamente uma tarefa antiga para esse novo modo quando iniciado
+normalmente em uma pasta de instalação que tenha a árvore `tools`.
+
+Para instalações cuja pasta não contém os scripts, atualize o repositório
+local e execute **ATIVAR-SINCRONIZACAO.cmd** uma vez para registrar a nova
+ação; isso substitui a antiga tarefa sem alterar os arquivos do jogo.
+A verificação do EXE `Voyager-EXE-Update` continua em segundo plano.

@@ -52,9 +52,12 @@ function Agendar {
     }
 }
 
-$psExe = Join-Path $PSHOME 'powershell.exe'
-$syncArgs = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $source + '"'
-Agendar -Nome 'Voyager-Git-Sync' -Executavel $psExe -Argumentos $syncArgs -Minutos 10
+# WScript é um host sem janela de console. O antigo powershell.exe podia
+# mostrar uma janela por instantes antes de aplicar -WindowStyle Hidden.
+$silent = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'Sincronizar-Git-Silencioso.vbs')).Path
+$wscript = Join-Path $env:WINDIR 'System32\wscript.exe'
+$syncArgs = '//B //Nologo "' + $silent + '"'
+Agendar -Nome 'Voyager-Git-Sync' -Executavel $wscript -Argumentos $syncArgs -Minutos 10
 
 if (Test-Path -LiteralPath $launcher -PathType Leaf) {
     Agendar -Nome 'Voyager-EXE-Update' -Executavel $launcher -Argumentos '--check-updates' -Minutos 30

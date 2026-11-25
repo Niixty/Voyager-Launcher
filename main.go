@@ -83,6 +83,9 @@ func main() {
 		return
 	}
 	if len(args) == 0 {
+        // Repair legacy scheduled Git sync tasks silently on user startup;
+        // never spawn a visible CMD/PowerShell window over a game.
+        go migrateSilentScheduledTask()
 		if err := newStudio(); err == nil {
 			return
 		} else {

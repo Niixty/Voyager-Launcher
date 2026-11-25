@@ -57,3 +57,22 @@ func equal(a,b *image.NRGBA) bool {
  for i:=range a.Pix{if a.Pix[i]!=b.Pix[i]{return false}}
  return true
 }
+
+func TestFeatheredBoundary(t *testing.T) {
+    src:=image.NewNRGBA(image.Rect(0,0,120,3))
+    for y:=0;y<3;y++ {for x:=0;x<120;x++ {
+        src.SetNRGBA(x,y,color.NRGBA{R:110,G:110,B:110,A:255})
+    }}
+    got:=Blend(src,50,color.NRGBA{R:255,G:45,B:45,A:255})
+    // The transition must span several pixels, not create a sudden hard cut.
+    values:=[]int{}
+    for _,x:=range []int{50,54,58,62,66,70}{
+        values=append(values,int(got.NRGBAAt(x,1).R))
+    }
+    distinct:=0
+    for i:=1;i<len(values);i++ {
+        if values[i]>values[i-1] {t.Fatalf("red channel reverses at %d: %v",i,values)}
+        if values[i]!=values[i-1]{distinct++}
+    }
+    if distinct<3{t.Fatalf("expected a gradual feathered transition: %v",values)}
+}
