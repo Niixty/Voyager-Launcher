@@ -362,7 +362,10 @@
         heroLayers.length !== 2 ||
         picture.classList.contains("bp-default-background"))
       throw Error("Hero em duas camadas ou ondas vetoriais do fundo padrão ausentes");
-    if (getComputedStyle(ambientWaves.querySelector(".bp-wave-drift")).animationPlayState !== "paused")
+    const waveStyle = () => getComputedStyle(ambientWaves.querySelector(".bp-wave-drift"));
+    // Windows can enable reduced motion on CI: the CSS then removes the
+    // animation entirely, so playState is not required to say "paused".
+    if (waveStyle().animationName !== "none" && waveStyle().animationPlayState !== "paused")
       throw Error("Ondas deveriam ficar pausadas quando a Hero está ativa");
     if (getComputedStyle(libraryGrid).scrollbarWidth !== "none" ||
         getComputedStyle(libraryGrid).overflowY !== "auto" ||
@@ -503,8 +506,8 @@
     await wait(() => document.querySelector(".big-picture").classList.contains("bp-cartridges"),
       "Visualização de cartucho");
     if (!picture.classList.contains("bp-default-background") ||
-        getComputedStyle(ambientWaves.querySelector(".bp-wave-drift")).animationPlayState !== "running")
-      throw Error("Fundo padrão deve ativar as ondas animadas");
+        (waveStyle().animationName !== "none" && waveStyle().animationPlayState !== "running"))
+      throw Error("Fundo padrão deve ativar as ondas animadas (exceto movimento reduzido)");
     if (getComputedStyle(ambientWaves).transitionProperty !== "opacity")
       throw Error("Alternância para ondas precisa de transição suave");
     // The cartridge image must sit directly over the Hero without a
