@@ -902,7 +902,12 @@ pre {
 .bp-wave-drift {
   transform-box: fill-box;
   transform-origin: center;
+  animation-play-state: paused;
   will-change: transform;
+}
+/* Pause the SVG compositor when the Hero is visible or waves are hidden. */
+.big-picture.bp-default-background .bp-wave-drift {
+  animation-play-state: running;
 }
 .bp-wave-drift-back {
   animation: bp-wave-breathe-back 24s ease-in-out infinite alternate;
