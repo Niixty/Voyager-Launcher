@@ -345,7 +345,11 @@ async function editor(g) {
     );
     color.onchange = () => edit((obj) => (obj.color = color.value));
     if (n.fontSize) {
-      fields.append(field("Cor", color));
+      if (n.id === "title") {
+        fields.append(el("small", "Cor automática da Hero: a mesma do preenchimento e brilho do Cartucho/Grid. Atualiza conforme o jogo."));
+      } else {
+        fields.append(field("Cor", color));
+      }
       const textAlign = options(
         [
           ["left", "Esquerda"],

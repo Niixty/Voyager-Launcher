@@ -191,7 +191,7 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
             themeColor=overlayTheme.Color("platform")
         case ll.Title:
             value=c.Title
-            themeColor=overlayTheme.Color("gameTitle")
+            themeColor=heroColor
             bold=true
         case ll.Description:
             if !appPrefs.ShowDescription{continue}
@@ -209,11 +209,13 @@ func drawOverlayPass(p *painter, c gameConfig, originX, originY, w, h, percent i
             themeColor=overlayTheme.Color("status")
         default:continue
         }
-        switch n.Color {
-        case "white":themeColor=overlayTheme.Color("gameTitle")
-        case "muted":themeColor=overlayTheme.Color("status")
-        case "hero":themeColor=heroColor
-        }
+        if n.ID!=ll.Title {
+            switch n.Color {
+            case "white":themeColor=overlayTheme.Color("gameTitle")
+            case "muted":themeColor=overlayTheme.Color("status")
+            case "hero":themeColor=heroColor
+            }
+        } // Title always matches the cartridge/Grid's heroColor.
         if failed && n.ID==ll.Phase {
             themeColor=overlayTheme.Color("headingError")
         }

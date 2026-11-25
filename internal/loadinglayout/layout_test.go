@@ -122,6 +122,26 @@ func TestLegacyHeadingRemovedWhilePreservingOtherNodes(t *testing.T) {
     if err!=nil{t.Fatal(err)}
     if restored.Find(Heading)!=nil || len(restored.Elements)!=7 {t.Fatal("camada legada reapareceu")}
 }
+func TestTitleAlwaysUsesHeroColorIncludingLegacyLayouts(t *testing.T) {
+    defaults:=Default()
+    if got:=defaults.Find(Title).Color;got!="hero" {t.Fatalf("cor padrão do título: %q",got)}
+    for _,oldColor:=range []string{"white","muted","auto","hero",""} {
+        old:=Default()
+        old.Find(Title).Color=oldColor
+        old.Find(Title).X=-50
+        old.Find(Title).FontSize=52
+        normalized:=old.Normalize()
+        n:=normalized.Find(Title)
+        if n.Color!="hero" || n.X!=-50 || n.FontSize!=52 {
+            t.Fatalf("migração de cor %q alterou layout: %+v",oldColor,n)
+        }
+        path:=filepath.Join(t.TempDir(),"loading_layout.json")
+        if err:=Save(path,old);err!=nil {t.Fatal(err)}
+        loaded,err:=Load(path)
+        if err!=nil {t.Fatal(err)}
+        if got:=loaded.Find(Title).Color;got!="hero" {t.Fatalf("cor legada %q não migrou: %q",oldColor,got)}
+    }
+}
 func TestHalfPixelCenterCoordinatesSurviveRoundtrip(t *testing.T){
     layout:=Default()
     cartridge:=layout.Find(Cartridge)

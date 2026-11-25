@@ -42,6 +42,19 @@ func TestDominantColorWins(t *testing.T) {
  r,g,b:=int((got>>16)&255),int((got>>8)&255),int(got&255)
  if b<=r||b<=g {t.Fatalf("blue expected: #%08x",got)}
 }
+func TestMostFrequentColorNotMinoritySaturatedAccent(t *testing.T) {
+    im:=image.NewNRGBA(image.Rect(0,0,200,100))
+    blue:=color.NRGBA{R:98,G:119,B:151,A:255}
+    red:=color.NRGBA{R:245,G:30,B:34,A:255}
+    for y:=0;y<100;y++ {
+        for x:=0;x<200;x++ {
+            if x<130 {im.SetNRGBA(x,y,blue)} else {im.SetNRGBA(x,y,red)}
+        }
+    }
+    got:=FromImage(im)
+    r,g,b:=int((got>>16)&255),int((got>>8)&255),int(got&255)
+    if b<=r || b<=g {t.Fatalf("cor mais frequente era azul, obtido #%08x",got)}
+}
 func TestPNGFile(t *testing.T) {
  path:=filepath.Join(t.TempDir(),"hero.png")
  f,err:=os.Create(path);if err!=nil{t.Fatal(err)}

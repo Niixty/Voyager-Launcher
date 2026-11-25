@@ -53,7 +53,7 @@ func Default() Layout {
     return Layout{Version:1, Elements: []Element{
         {ID:Cartridge,X:165,Y:226,W:305,H:411,Visible:true},
         {ID:Platform,X:526,Y:243,W:810,H:33,FontSize:15,Visible:true,Color:"auto"},
-        {ID:Title,X:526,Y:300,W:845,H:120,FontSize:43,Visible:true,Color:"white"},
+        {ID:Title,X:526,Y:300,W:845,H:120,FontSize:43,Visible:true,Color:"hero"},
         {ID:Description,X:526,Y:465,W:790,H:85,FontSize:19,Visible:true,Color:"muted"},
         {ID:Percentage,X:1277,Y:580,W:125,H:38,FontSize:21,Visible:true,Color:"white"},
         {ID:Progress,X:526,Y:634,W:865,H:6,Visible:false},
@@ -113,6 +113,9 @@ func (e *Element) Normalize(){
     if e.Color!="hero" && e.Color!="white" && e.Color!="muted" && e.Color!="auto" {
         e.Color="auto"
     }
+    // The title is always linked to the Hero accent, including old layouts
+    // that explicitly saved "white" or "muted" before this feature existed.
+    if e.ID==Title {e.Color="hero"}
 }
 func (l Layout) Normalize() Layout {
     defaults:=Default()

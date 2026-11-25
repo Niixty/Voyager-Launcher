@@ -355,3 +355,22 @@ alternando entre: **Verificando arquivos do jogo**,
 **Aguardando a janela do jogo...**, **Janela do jogo detectada**,
 **Confirmando imagem do jogo...**, **Finalizando carregamento...**
 e **Jogo pronto**. A prévia nunca inicia o jogo de verdade.
+
+
+### Cor dominante da Hero no título e no cartucho/Grid
+
+A imagem `hero.png` de cada jogo define automaticamente uma única cor de
+destaque, selecionando a **família de cores aproveitáveis mais frequente**
+na arte (ignorando preto, branco, transparência e tons quase cinza). O
+sistema ajusta a luminosidade para garantir a leitura sobre o fundo escuro.
+
+O título do jogo passa a usar **essa mesma cor** automaticamente, e o
+preenchimento horizontal translúcido e o halo do cartucho (ou da Grid,
+caso não haja cartucho) reutilizam o mesmo valor RGB. Não existe cálculo
+separado para o título, então os dois elementos ficam harmonizados.
+A opção de cor do título foi fixada em "Hero" no editor, e layouts antigos
+que armazenavam `"color": "white"` são atualizados durante a
+normalização, sem alterar fonte, alinhamento nem posição.
+
+Se não houver Hero legível ou houver apenas tons acinzentados, é
+utilizada a cor neutra de fallback.

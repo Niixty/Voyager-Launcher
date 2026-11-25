@@ -78,6 +78,8 @@
     );
     layer.value = "title";
     layer.dispatchEvent(new Event("change", { bubbles: true }));
+    if (!document.body.innerText.includes("Cor automática da Hero"))
+      throw Error("O editor não indica que o Título usa a cor da Hero");
     const textAlign = document.querySelector('[data-text-align="horizontal"]');
     if (!textAlign) throw Error("Alinhamento horizontal ausente");
     textAlign.value = "right";
@@ -116,6 +118,8 @@
     await probe.Progress("saved");
     const saved = await api.Layout("Smoke");
     const titleSaved = saved.elements.find((n) => n.id === "title");
+    if (titleSaved.color !== "hero")
+      throw Error("O Título não foi salvo usando cor automática da Hero");
     if (titleSaved.textAlign !== "right" || titleSaved.verticalAlign !== "bottom") {
       throw Error("Alinhamento não persistido no layout");
     }

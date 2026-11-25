@@ -22,8 +22,10 @@ func FromFile(path string) uint32 {
     return FromImage(im)
 }
 
-// FromImage selects the strongest color family, instead of the darkest or
-// lightest pixel, and adjusts it to remain visible on the dark loading screen.
+// FromImage selects the MOST FREQUENT usable chromatic color family in the
+// Hero (not the most saturated isolated pixel). Dark/grey/white pixels are
+// ignored; the selected hue is gently brightened for readable UI text and
+// the translucent cartridge/Grid progress animation.
 func FromImage(im image.Image) uint32 {
     if im == nil { return Neutral }
     bounds := im.Bounds()
@@ -48,7 +50,9 @@ func FromImage(im image.Image) uint32 {
             hue, saturation, value := toHSV(rf,gf,bf)
             if saturation < 0.19 || value < 0.105 || value > 0.985 { continue }
             bin := int(hue*bands)%bands
-            weight := 0.5+saturation*saturation*1.8
+            // Frequency, not vibrance, chooses the winner. Otherwise a small
+            // vivid red object can override a mostly blue Hero image.
+            weight := 1.0
             histogram[bin]+=weight
             angle := hue*2*math.Pi
             sumSin[bin]+=math.Sin(angle)*weight
