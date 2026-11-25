@@ -8,9 +8,15 @@ async function openBigPicture() {
   const defaults = {
     view: "grid", background: "hero", buttonStyle: "auto", showTitle: true,
     showPlatform: true, blurBackground: true, dim: 65,
+    scrollDirection: "vertical", columns: 4, rows: 2, iconSize: 100,
   };
   const prefs = { ...defaults, ...(await api.BigPictureOptions()) };
   if (!["auto", "xbox", "playstation"].includes(prefs.buttonStyle)) prefs.buttonStyle = "auto";
+  if (!["vertical", "horizontal"].includes(prefs.scrollDirection)) prefs.scrollDirection = "vertical";
+  prefs.columns = Number.isInteger(prefs.columns) ? Math.max(1, Math.min(8, prefs.columns)) : 4;
+  prefs.rows = Number.isInteger(prefs.rows) ? Math.max(1, Math.min(4, prefs.rows)) : 2;
+  prefs.iconSize = Number.isFinite(prefs.iconSize)
+    ? Math.max(60, Math.min(140, Math.round(prefs.iconSize / 10) * 10)) : 100;
   const iconPack = window.VoyagerGamepadIcons;
   const previous = document.activeElement;
   const panel = el("section", null, "big-picture");
@@ -89,6 +95,14 @@ async function openBigPicture() {
         const styles = ["auto", "xbox", "playstation"];
         prefs.buttonStyle = styles[(styles.indexOf(prefs.buttonStyle) + 1) % styles.length];
       }],
+    ["scrollDirection", "Direção da rolagem", () => prefs.scrollDirection === "horizontal" ? "Horizontal" : "Vertical",
+      () => { prefs.scrollDirection = prefs.scrollDirection === "vertical" ? "horizontal" : "vertical"; }],
+    ["columns", "Colunas visíveis", () => String(prefs.columns),
+      () => { prefs.columns = prefs.columns >= 8 ? 1 : prefs.columns + 1; }],
+    ["rows", "Linhas visíveis", () => String(prefs.rows),
+      () => { prefs.rows = prefs.rows >= 4 ? 1 : prefs.rows + 1; }],
+    ["iconSize", "Tamanho dos ícones", () => prefs.iconSize + "%",
+      () => { prefs.iconSize = prefs.iconSize >= 140 ? 60 : prefs.iconSize + 10; }],
     ["background", "Fundo", () => prefs.background === "hero" ? "Hero do jogo selecionado" : "Fundo padrão",
       () => { prefs.background = prefs.background === "hero" ? "solid" : "hero"; }],
     ["blurBackground", "Desfoque do fundo", () => prefs.blurBackground ? "Ativado" : "Desativado",
@@ -129,6 +143,14 @@ async function openBigPicture() {
   if (cards.length) select(0); else settingsButton.focus();
   refreshGlyphs("xbox");
   document.addEventListener("keydown", key, true);
+  // In horizontal mode a regular vertical mouse-wheel gesture scrolls sideways.
+  grid.addEventListener("wheel", (event) => {
+    if (prefs.scrollDirection !== "horizontal" || settingsOpen ||
+        Math.abs(event.deltaY) <= Math.abs(event.deltaX) ||
+        grid.scrollWidth <= grid.clientWidth) return;
+    grid.scrollLeft += event.deltaY;
+    event.preventDefault();
+  }, { passive: false });
   frame = requestAnimationFrame(poll);
 
   function updateClock() {
@@ -145,6 +167,10 @@ async function openBigPicture() {
   function renderPreferences() {
     panel.dataset.view = prefs.view;
     panel.classList.toggle("bp-cartridges", prefs.view === "cartridge");
+    panel.classList.toggle("bp-scroll-horizontal", prefs.scrollDirection === "horizontal");
+    grid.style.setProperty("--bp-columns", String(prefs.columns));
+    grid.style.setProperty("--bp-rows", String(prefs.rows));
+    grid.style.setProperty("--bp-icon-scale", String(prefs.iconSize / 100));
     panel.classList.toggle("bp-hide-title", !prefs.showTitle);
     panel.classList.toggle("bp-hide-platform", !prefs.showPlatform);
     panel.classList.toggle("bp-blur-hero", prefs.blurBackground);
@@ -158,13 +184,20 @@ async function openBigPicture() {
           if (img.isConnected) img.replaceWith(image(game.ID, "grid"));
         };
       }
-      cover.replaceChildren(el("span", (game.Config.title || game.ID).slice(0, 1)), img);
+      // Changing rows/columns/size should not reload every image and flicker.
+      if (cover.dataset.kind !== kind) {
+        cover.replaceChildren(el("span", (game.Config.title || game.ID).slice(0, 1)), img);
+        cover.dataset.kind = kind;
+      }
     }
     optionSpecs.forEach(([key, label, value], i) => {
       settingsButtons[i].replaceChildren(
         el("span", label), el("strong", value()), el("span", "Alterar", "bp-setting-arrow"),
       );
     });
+    if (cards[selected]) {
+      cards[selected].scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
     refreshBackground();
     refreshGlyphs(lastDetectedFamily);
   }
@@ -233,7 +266,7 @@ async function openBigPicture() {
     platformHeading.textContent = rows[index]?.Config?.platform?.trim() || "Biblioteca de jogos";
     cards[index].classList.add("selected");
     if (focus) cards[index].focus({ preventScroll: true });
-    cards[index].scrollIntoView({ block: "nearest" });
+    cards[index].scrollIntoView({ block: "nearest", inline: "nearest" });
     refreshBackground();
     refreshAccent();
   }
@@ -300,9 +333,23 @@ async function openBigPicture() {
     }
     if (!cards.length) return;
     if (action === "play") { start(selected); return; }
-    const columns = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(" ").length);
-    const step = { left: -1, right: 1, up: -columns, down: columns }[action] || 0;
-    if (step) select(Math.max(0, Math.min(cards.length - 1, selected + step)));
+    // The browser places games row-major vertically and column-major horizontally.
+    const horizontal = prefs.scrollDirection === "horizontal";
+    const track = horizontal ? prefs.rows : prefs.columns;
+    const cross = selected % track;
+    let next = selected;
+    if (horizontal) {
+      if (action === "left") next -= track;
+      if (action === "right") next += track;
+      if (action === "up" && cross > 0) next--;
+      if (action === "down" && cross < track - 1) next++;
+    } else {
+      if (action === "up") next -= track;
+      if (action === "down") next += track;
+      if (action === "left" && cross > 0) next--;
+      if (action === "right" && cross < track - 1) next++;
+    }
+    if (next >= 0 && next < cards.length && next !== selected) select(next);
   }
   function key(e) {
     const action = {
