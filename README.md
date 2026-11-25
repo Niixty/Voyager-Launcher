@@ -505,3 +505,32 @@ licença/atribuição em `desktop/controller-icons/LICENSE.md`. Os PNGs
 são embutidos no executável no build e acessados internamente pelo
 endereço `/controller-icons/<nome>.png`; para visualizar ou substituir
 os arquivos originais, abra a pasta do repositório no GitHub Desktop.
+
+
+### Big Picture: halo da Hero sem recorte e padrão dos botões
+
+O cartucho selecionado recebe um halo na **cor dominante da Hero
+correspondente ao jogo**, calculada pela mesma rotina nativa
+`heroaccent.FromFile` utilizada no loading. A cor é consultada apenas
+na primeira seleção de cada jogo (cache por ID); respostas que chegam
+após o usuário selecionar outro jogo são ignoradas. Quando a Hero
+não existe ou não possui cor útil, utiliza a cor neutra padrão.
+
+No modo **Cartuchos**, o contêiner da imagem permite
+`overflow: visible` e a grade mantém margem interna para que o
+`drop-shadow` se expanda **além das bordas do PNG** e não fique com
+corte quadrado. A seleção segue a silhueta transparente do cartucho,
+sem voltar a mostrar o retângulo azul de cartões. A exibição **Grid**
+mantém a aparência original.
+
+A opção **Padrão dos botões** no menu de Configurações permite
+**Automático** (identificação do controle conectado), **Xbox**
+ou **PlayStation**. O padrão selecionado altera apenas os ícones
+de A/B/X/Y ou ✕/○/□/△ exibidos no topo e no rodapé;
+os índices físicos da Gamepad API não são remapeados.
+A escolha é salva no campo `buttonStyle` do `bigpicture.json`,
+sem interferir nos jogos cadastrados ou na sincronização da main.
+
+Dentro das configurações, use **direcional para focar uma opção**,
+**A (Xbox) / ✕ (PlayStation)** para modificá-la e **B / ○** para
+voltar. **Select / Share** continua abrindo/fechando o menu.

@@ -902,6 +902,9 @@ pre {
 .bp-cover img { z-index: 1; }
 .bp-cartridges .bp-grid {
   grid-template-columns: repeat(auto-fill,minmax(clamp(190px,22vw,395px),1fr));
+  /* The grid is scrollable. Give the selected image's external glow
+     room to expand even at the first/last row of cartridges. */
+  padding: 60px;
 }
 .bp-cartridges .bp-card,
 .bp-cartridges .bp-card:hover,
@@ -926,6 +929,8 @@ pre {
   background: transparent;
   border: none;
   box-shadow: none;
+  /* The old overflow:hidden cut drop-shadow at the PNG image bounds. */
+  overflow: visible;
 }
 .bp-cartridges .bp-cover img {
   object-fit: contain;
@@ -934,7 +939,11 @@ pre {
 }
 .bp-cartridges .bp-card.selected .bp-cover img,
 .bp-cartridges .bp-card:focus-visible .bp-cover img {
-  filter: drop-shadow(0 0 8px #9edcfbcc) drop-shadow(0 0 15px #9edcfb70);
+  /* Use the selected game's dominant Hero color. Drop-shadow follows
+     opaque cartridge pixels and is allowed to expand beyond the PNG. */
+  filter: drop-shadow(0 0 10px var(--bp-glow-color, #ACB7C1))
+          drop-shadow(0 0 24px var(--bp-glow-soft, #ACB7C188))
+          drop-shadow(0 0 32px var(--bp-glow-wide, #ACB7C150));
 }
 .bp-open-settings {
   display: inline-flex;

@@ -363,6 +363,11 @@
     await wait(() => document.querySelectorAll(".bp-card")[1].matches(".selected"), "Direcional");
     if (document.querySelector(".bp-heading h1")?.textContent !== "Nintendo 64")
       throw Error("Título não atualiza quando muda a plataforma do jogo selecionado");
+    if (typeof api.BigPictureAccent !== "function")
+      throw Error("Método que extrai cor dominante da Hero não registrado no Wails");
+    const heroAccent = (await api.BigPictureAccent("Smoke2")).toUpperCase();
+    await wait(() => document.querySelector(".big-picture")?.style.getPropertyValue("--bp-glow-color") === heroAccent,
+      "Brilho do cartucho deve usar cor dominante da Hero do jogo selecionado");
     buttons[15].pressed = false;
     buttons[0].pressed = true;
     await wait(() => launches.length > 0, "Botão A");
@@ -396,9 +401,39 @@
     if (!document.querySelector(".bp-controls img[src*='generic_select.png']") ||
         !document.querySelector(".bp-open-settings img[src*='generic_select.png']"))
       throw Error("Ícone Select genérico ausente para controles PlayStation");
+    // The controller's South button (A on Xbox / Cross on PS) must
+    // ACTIVATE the selected settings row, not launch the underlying game.
+    if (document.activeElement?.dataset.setting !== "view")
+      throw Error("Foco inicial das configurações deveria estar em Imagens");
+    secondButtons[0].pressed = true;
+    await wait(() => document.querySelector(".big-picture").classList.contains("bp-cartridges"),
+      "Botão A não alterou a opção Imagens dentro das configurações");
+    secondButtons[0].pressed = false;
+    await new Promise((r) => setTimeout(r, 110));
+    if (launches.length !== 1)
+      throw Error("Botão A nas configurações abriu um jogo indevidamente");
+    // Move to the button layout row and force Xbox then PlayStation.
+    secondButtons[13].pressed = true;
+    await wait(() => document.activeElement?.dataset.setting === "buttonStyle",
+      "Direcional não focou Padrão dos botões");
+    secondButtons[13].pressed = false;
+    await new Promise((r) => setTimeout(r, 110));
+    secondButtons[0].pressed = true;
+    await wait(() => document.querySelector(".big-picture")?.dataset.controller === "xbox",
+      "Botão A não selecionou ícones Xbox");
+    secondButtons[0].pressed = false;
+    await new Promise((r) => setTimeout(r, 110));
+    if (!document.querySelector(".bp-controls img[src*='xb_a.png']"))
+      throw Error("Forçar ícones Xbox não alterou os botões visuais");
+    secondButtons[0].pressed = true;
+    await wait(() => document.querySelector(".big-picture")?.dataset.controller === "playstation",
+      "Botão A não selecionou ícones PlayStation");
+    secondButtons[0].pressed = false;
+    await new Promise((r) => setTimeout(r, 110));
+    if (!document.querySelector(".bp-controls img[src*='ps_x.png']"))
+      throw Error("Forçar ícones PlayStation não alterou os botões visuais");
     const toggles = [
-      ["view", "cartridge"], ["background", "solid"],
-      ["showTitle", false], ["showPlatform", false],
+      ["background", "solid"], ["showTitle", false], ["showPlatform", false],
     ];
     for (const [key] of toggles) {
       const option = document.querySelector('.bp-setting[data-setting="' + key + '"]');
@@ -423,12 +458,17 @@
     }
     if (getComputedStyle(cartridgeCard).outlineStyle !== "none")
       throw Error("A seleção do cartucho ainda desenha uma moldura retangular");
+    if (getComputedStyle(cartridgeCover).overflow !== "visible")
+      throw Error("O brilho ainda é cortado nas bordas PNG pelo overflow do cartucho");
+    if (!getComputedStyle(cartridgeCover.querySelector("img")).filter.includes("drop-shadow"))
+      throw Error("O cartucho selecionado não tem o halo de cor da Hero");
     // Serialized writes must persist beyond the current fullscreen session.
     await wait(() => document.querySelector(".bp-settings-list"), "Configurações visíveis");
     let savedBp = await api.BigPictureOptions();
     const allSaved = () => savedBp.view === "cartridge" &&
       savedBp.background === "solid" &&
-      savedBp.showTitle === false && savedBp.showPlatform === false;
+      savedBp.showTitle === false && savedBp.showPlatform === false &&
+      savedBp.buttonStyle === "playstation";
     for (let retry = 0; retry < 60 && !allSaved(); retry++) {
       await new Promise((r) => setTimeout(r, 100));
       savedBp = await api.BigPictureOptions();
@@ -449,6 +489,8 @@
       "Configuração persistida ao reabrir");
     if (!document.querySelector(".big-picture").classList.contains("bp-hide-title"))
       throw Error("Big Picture reabriu com títulos visíveis");
+    if (document.querySelector(".big-picture").dataset.controller !== "playstation")
+      throw Error("Padrão de botões PlayStation não foi recuperado ao abrir Big Picture");
     document.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape",bubbles:true,cancelable:true}));
     await wait(() => !document.querySelector(".big-picture"), "Fechar modo Big Picture");
     api.Run = originalRun;

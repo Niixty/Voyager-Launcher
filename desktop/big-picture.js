@@ -6,10 +6,11 @@
 async function openBigPicture() {
   if (document.querySelector(".big-picture")) return;
   const defaults = {
-    view: "grid", background: "hero", showTitle: true,
+    view: "grid", background: "hero", buttonStyle: "auto", showTitle: true,
     showPlatform: true, blurBackground: true, dim: 65,
   };
   const prefs = { ...defaults, ...(await api.BigPictureOptions()) };
+  if (!["auto", "xbox", "playstation"].includes(prefs.buttonStyle)) prefs.buttonStyle = "auto";
   const iconPack = window.VoyagerGamepadIcons;
   const previous = document.activeElement;
   const panel = el("section", null, "big-picture");
@@ -54,7 +55,9 @@ async function openBigPicture() {
   const platforms = [];
   let selected = 0, frame = 0, busy = false, closing = false;
   let settingsOpen = false, settingsIndex = 0;
-  let currentFamily = "", activePadIndex = null, saveChain = Promise.resolve();
+  let currentFamily = "", renderedButtonStyle = "", lastDetectedFamily = "xbox", activePadIndex = null, saveChain = Promise.resolve();
+  const accentCache = new Map();
+  let accentRequestSerial = 0;
   const heldByPad = new Map();
 
   for (const [i, game] of rows.entries()) {
@@ -76,6 +79,13 @@ async function openBigPicture() {
   const optionSpecs = [
     ["view", "Imagens dos jogos", () => prefs.view === "cartridge" ? "Cartuchos" : "Capas Grid",
       () => { prefs.view = prefs.view === "grid" ? "cartridge" : "grid"; }],
+    ["buttonStyle", "Padrão dos botões", () => ({
+        auto: "Automático", xbox: "Xbox (A / B / X / Y)", playstation: "PlayStation (✕ / ○ / □ / △)",
+      })[prefs.buttonStyle],
+      () => {
+        const styles = ["auto", "xbox", "playstation"];
+        prefs.buttonStyle = styles[(styles.indexOf(prefs.buttonStyle) + 1) % styles.length];
+      }],
     ["background", "Fundo", () => prefs.background === "hero" ? "Hero do jogo selecionado" : "Fundo padrão",
       () => { prefs.background = prefs.background === "hero" ? "solid" : "hero"; }],
     ["blurBackground", "Desfoque do fundo", () => prefs.blurBackground ? "Ativado" : "Desativado",
@@ -146,6 +156,7 @@ async function openBigPicture() {
       );
     });
     refreshBackground();
+    refreshGlyphs(lastDetectedFamily);
   }
   function refreshBackground() {
     background.replaceChildren();
@@ -155,12 +166,16 @@ async function openBigPicture() {
     art.onerror = () => art.remove();
     background.append(art);
   }
-  function refreshGlyphs(family) {
-    if (family === currentFamily) return;
+  function refreshGlyphs(detectedFamily) {
+    lastDetectedFamily = detectedFamily || "xbox";
+    const family = prefs.buttonStyle === "auto" ? lastDetectedFamily : prefs.buttonStyle;
+    if (family === currentFamily && renderedButtonStyle === prefs.buttonStyle) return;
     currentFamily = family;
+    renderedButtonStyle = prefs.buttonStyle;
     panel.dataset.controller = family;
-    familyLabel.textContent = family === "playstation"
-      ? "Controle PlayStation" : "Controle Xbox / genérico";
+    familyLabel.textContent = prefs.buttonStyle !== "auto"
+      ? "Ícones " + (family === "playstation" ? "PlayStation" : "Xbox")
+      : (family === "playstation" ? "Controle PlayStation" : "Controle Xbox / genérico");
     exit.replaceChildren(
       iconPack?.button(1, family, "") || el("span", "B"), el("span", "Sair"),
     );
@@ -182,6 +197,28 @@ async function openBigPicture() {
       hint([iconPack?.button(8, family)], "Configurações"),
     );
   }
+  // Use the same native heroaccent algorithm as loading title and cartridge.
+  // The first visit requests the dominant color once per game; stale results
+  // cannot recolor a different cartridge when a controller scrolls quickly.
+  function refreshAccent() {
+    const id = rows[selected]?.ID;
+    const serial = ++accentRequestSerial;
+    const apply = (value) => {
+      if (serial !== accentRequestSerial || !panel.isConnected) return;
+      const color = /^#[0-9a-f]{6}$/i.test(value || "") ? value.toUpperCase() : "#ACB7C1";
+      panel.style.setProperty("--bp-glow-color", color);
+      panel.style.setProperty("--bp-glow-soft", color + "88");
+      panel.style.setProperty("--bp-glow-wide", color + "50");
+    };
+    if (!id) { apply("#ACB7C1"); return; }
+    if (accentCache.has(id)) { apply(accentCache.get(id)); return; }
+    // Never show the prior game's color while this Hero is loading.
+    apply("#ACB7C1");
+    api.BigPictureAccent(id).then((color) => {
+      accentCache.set(id,color);
+      apply(color);
+    }).catch(() => apply("#ACB7C1"));
+  }
   function select(index, focus = true) {
     if (!cards[index]) return;
     cards[selected]?.classList.remove("selected");
@@ -191,6 +228,7 @@ async function openBigPicture() {
     if (focus) cards[index].focus({ preventScroll: true });
     cards[index].scrollIntoView({ block: "nearest" });
     refreshBackground();
+    refreshAccent();
   }
   function showSettings(open) {
     settingsOpen = open;
@@ -242,6 +280,8 @@ async function openBigPicture() {
     }
     if (settingsOpen) {
       if (action === "play") {
+        // Standard button 0 (Xbox A / PlayStation Cross) applies the
+        // focused preference; this also works for a second controller.
         settingsButtons[settingsIndex]?.click();
       } else {
         const move = { up: -1, left: -1, down: 1, right: 1 }[action] || 0;
