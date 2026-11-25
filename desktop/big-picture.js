@@ -236,10 +236,12 @@ async function openBigPicture() {
     grid.style.setProperty("--bp-icon-scale", String(Number(effectiveScale.toFixed(3))));
     grid.style.setProperty("--bp-selected-scale", String(Number((effectiveScale * 1.055).toFixed(3))));
     grid.style.setProperty("--bp-cartridge-spacing", prefs.cartridgeSpacing + "px");
-    // Track size must shrink together with the artwork. At zero spacing,
-    // shrinking only the PNG with transform() leaves a large invisible
-    // remainder of each grid cell between neighboring cartridges.
-    const trackScale = Math.min(1, effectiveScale);
+    // Even when CSS grid gap is 0, each transparent cartridge PNG contains
+    // invisible side margins. Compact the tracks an extra 22% at 0px, keeping
+    // the rendered artwork at the requested size with inverse cover scaling.
+    // Restore the ordinary track width progressively as spacing increases.
+    const compactness = 0.78 + 0.22 * (prefs.cartridgeSpacing / 48);
+    const trackScale = Math.min(1, effectiveScale * compactness);
     const coverScale = effectiveScale / trackScale;
     grid.style.setProperty("--bp-cartridge-track-scale", String(Number(trackScale.toFixed(3))));
     grid.style.setProperty("--bp-cartridge-visual-scale", String(Number(coverScale.toFixed(3))));
