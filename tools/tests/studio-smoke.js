@@ -359,10 +359,20 @@
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const ambientWaves = document.querySelector(".bp-default-waves");
     const heroLayers = document.querySelectorAll(".bp-hero-layer");
+    const waveScenes = [...(ambientWaves?.querySelectorAll(".bp-wave-scene") || [])];
+    const themeAccent = getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent").trim().toUpperCase();
     if (!ambientWaves || ambientWaves.querySelectorAll(".bp-wave-path").length < 3 ||
-        heroLayers.length !== 2 ||
+        heroLayers.length !== 2 || waveScenes.length !== 2 ||
+        waveScenes.filter(scene => scene.classList.contains("is-active")).length !== 1 ||
+        waveScenes[0].querySelector("linearGradient")?.id === waveScenes[1].querySelector("linearGradient")?.id ||
         picture.classList.contains("bp-default-background"))
-      throw Error("Hero em duas camadas ou ondas vetoriais do fundo padrão ausentes");
+      throw Error("Hero ou duas cenas SVG independentes do fundo padrão ausentes");
+    if (picture.style.getPropertyValue("--bp-heading-accent") !== themeAccent ||
+        waveScenes.find(scene => scene.classList.contains("is-active"))?.dataset.accent !== themeAccent)
+      throw Error("Tema do app não foi aplicado ao fundo padrão e texto BIBLIOTECA DE JOGOS");
+    if (libraryGrid.style.getPropertyValue("--bp-icon-scale") !== "0.8")
+      throw Error("100% dos ícones não equivale a 80% da escala antiga");
     const waveStyle = () => getComputedStyle(ambientWaves.querySelector(".bp-wave-drift"));
     // Windows can enable reduced motion on CI: the CSS then removes the
     // animation entirely, so playState is not required to say "paused".
@@ -503,11 +513,14 @@
     libraryGrid.style.setProperty("--bp-rows", "2");
     layoutOption("columns").click(); // 4 -> 5
     for (let i = 0; i < 3; i++) layoutOption("rows").click(); // 2 -> 3 -> 4 -> 1
-    layoutOption("iconSize").click(); // 100% -> 110%
+    layoutOption("iconSize").click(); // 100% -> 110% (old 88%)
+    layoutOption("cartridgeSpacing").click(); // 24px -> 28px
+    layoutOption("cartridgeSpacing").click(); // 28px -> 32px
     if (libraryGrid.style.getPropertyValue("--bp-columns") !== "5" ||
         libraryGrid.style.getPropertyValue("--bp-rows") !== "1" ||
-        libraryGrid.style.getPropertyValue("--bp-icon-scale") !== "1.1")
-      throw Error("Colunas, linhas ou tamanho dos ícones não atualizaram");
+        libraryGrid.style.getPropertyValue("--bp-icon-scale") !== "0.88" ||
+        libraryGrid.style.getPropertyValue("--bp-cartridge-spacing") !== "32px")
+      throw Error("Colunas, linhas, escala de 80% ou espaçamento não atualizaram");
     if (getComputedStyle(libraryGrid.querySelector(".bp-cover")).transform === "none")
       throw Error("Tamanho dos ícones não aplicou escala visual");
     const toggles = [
@@ -519,14 +532,21 @@
       option.click();
     }
     layoutOption("defaultBackgroundHeroColor").click();
+    const activeWaveScene = () => waveScenes.find(scene => scene.classList.contains("is-active"));
     if (!picture.classList.contains("bp-wave-follows-hero") ||
-        !ambientWaves.style.getPropertyValue("--bp-wave-deep").startsWith("hsl(") ||
-        !ambientWaves.style.getPropertyValue("--bp-wave-mid").startsWith("hsl(") ||
-        !ambientWaves.style.getPropertyValue("--bp-wave-light").startsWith("hsl(") ||
-        !ambientWaves.style.getPropertyValue("--bp-wave-hue-shift").endsWith("deg"))
-      throw Error("Ondas não seguiram a cor predominante da Hero selecionada");
+        picture.style.getPropertyValue("--bp-heading-accent") !== heroAccent ||
+        activeWaveScene()?.dataset.accent !== heroAccent ||
+        !activeWaveScene().style.getPropertyValue("--bp-wave-deep").startsWith("hsl(") ||
+        !activeWaveScene().style.getPropertyValue("--bp-wave-mid").startsWith("hsl(") ||
+        !activeWaveScene().style.getPropertyValue("--bp-wave-light").startsWith("hsl(") ||
+        !activeWaveScene().style.getPropertyValue("--bp-wave-hue-shift").endsWith("deg"))
+      throw Error("O fundo completo e o título não receberam a cor dominante da Hero");
+    if (getComputedStyle(activeWaveScene().querySelector(".bp-waves-svg")).transitionDuration !== "0s")
+      throw Error("O SVG ainda interpola hue-rotate e produz cores intermediárias indesejadas");
     await wait(() => document.querySelector(".big-picture").classList.contains("bp-cartridges"),
       "Visualização de cartucho");
+    if (getComputedStyle(libraryGrid).columnGap !== "32px")
+      throw Error("Espaçamento configurado não foi aplicado aos cartuchos");
     if (!picture.classList.contains("bp-default-background") ||
         (waveStyle().animationName !== "none" && waveStyle().animationPlayState !== "running"))
       throw Error("Fundo padrão deve ativar as ondas animadas (exceto movimento reduzido)");
@@ -561,7 +581,7 @@
       savedBp.buttonStyle === "playstation" &&
       savedBp.scrollDirection === "horizontal" && savedBp.columns === 5 &&
       savedBp.rows === 1 && savedBp.iconSize === 110 &&
-      savedBp.defaultBackgroundHeroColor === true;
+      savedBp.cartridgeSpacing === 32 && savedBp.defaultBackgroundHeroColor === true;
     for (let retry = 0; retry < 60 && !allSaved(); retry++) {
       await new Promise((r) => setTimeout(r, 100));
       savedBp = await api.BigPictureOptions();
@@ -594,14 +614,15 @@
     if (!document.querySelector(".big-picture").classList.contains("bp-hide-title"))
       throw Error("Big Picture reabriu com títulos visíveis");
     if (!document.querySelector(".big-picture").classList.contains("bp-scroll-horizontal") ||
-        document.querySelector(".bp-grid").style.getPropertyValue("--bp-icon-scale") !== "1.1")
-      throw Error("Direção e escala do layout não persistiram ao reabrir");
+        document.querySelector(".bp-grid").style.getPropertyValue("--bp-icon-scale") !== "0.88" ||
+        document.querySelector(".bp-grid").style.getPropertyValue("--bp-cartridge-spacing") !== "32px")
+      throw Error("Direção, novo tamanho de ícones e espaçamento não persistiram ao reabrir");
     if (!document.querySelector(".big-picture").classList.contains("bp-default-background") ||
         document.querySelector(".bp-default-waves")?.querySelectorAll(".bp-wave-path").length < 3)
       throw Error("Fundo animado não foi restaurado ao reabrir");
     if (!document.querySelector(".big-picture").classList.contains("bp-wave-follows-hero") ||
-        !document.querySelector(".bp-default-waves").style.getPropertyValue("--bp-wave-hue-shift"))
-      throw Error("A cor da Hero do fundo padrão não persistiu ao reabrir");
+        document.querySelectorAll(".bp-wave-scene").length !== 2)
+      throw Error("O modo Hero e duas cenas do fundo padrão não foram restaurados ao reabrir");
     if (document.querySelector(".big-picture").dataset.controller !== "playstation")
       throw Error("Padrão de botões PlayStation não foi recuperado ao abrir Big Picture");
     document.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape",bubbles:true,cancelable:true}));
