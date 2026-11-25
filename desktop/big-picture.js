@@ -271,7 +271,7 @@ async function openBigPicture() {
     const art = image(id, "hero");
     art.alt = "";
     art.onload = () => {
-      if (serial !== heroSerial || !panel.isConnected || prefs.background !== "hero") return;
+      if (serial !== heroSerial || !panel.isConnected) return;
       heroLayers[nextSlot].classList.add("is-active");
       heroLayers[heroSlot].classList.remove("is-active");
       heroSlot = nextSlot;
