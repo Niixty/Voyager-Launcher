@@ -743,7 +743,7 @@ pre {
 @media (max-width: 790px) {
   .bp-header-actions { gap: 10px; }
   .bp-controls { justify-content: flex-start; }
-  .big-picture { padding: 3vh 3vw 2vh; }
+  .big-picture { padding: 3vh 3vw 2vh; --bp-screen-gutter: 3vw; }
 }
 
 
@@ -864,6 +864,7 @@ pre {
 .big-picture {
   isolation: isolate;
   overflow: hidden;
+  --bp-screen-gutter: 5vw;
 }
 .bp-hero-background {
   position: absolute;
@@ -895,9 +896,22 @@ pre {
   transition: opacity 780ms ease-in-out;
   overflow: hidden;
   pointer-events: none;
+  /* The optional per-game palette recolors the full waves and surface. */
+  background:
+    radial-gradient(ellipse at 75% 28%, var(--bp-wave-light, #102f60), transparent 56%),
+    linear-gradient(135deg,
+      var(--bp-wave-deep, #08152e) 0%,
+      var(--bp-wave-mid, #081b3d) 48%,
+      var(--bp-wave-deep, #030a1a) 100%);
 }
 .big-picture.bp-default-background .bp-default-waves { opacity: 1; }
-.bp-waves-svg { display: block; width: 100%; height: 100%; }
+.bp-waves-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: hue-rotate(var(--bp-wave-hue-shift, 0deg));
+  transition: filter 650ms ease-in-out;
+}
 .bp-wave-path { pointer-events: none; }
 .bp-wave-drift {
   transform-box: fill-box;
@@ -968,8 +982,8 @@ pre {
   place-items: center;
 }
 .bp-cover img { z-index: 1; }
-/* Layout settings are shared by Grid and Cartridge. The padding keeps the
-   selected PNG's glow inside the scrolling viewport at either end. */
+/* Vertical mode retains inner padding. Horizontal mode below is full bleed:
+   the scrollport reaches the actual screen edges instead of clipping the glow. */
 .big-picture .bp-grid {
   --bp-layout-gap: clamp(12px, 1.6vw, 28px);
   display: grid;
@@ -996,6 +1010,13 @@ pre {
   height: 0;
 }
 .big-picture.bp-scroll-horizontal .bp-grid {
+  /* An inset scrollport clipped the glow at an invisible 5vw wall.
+     First/last cartridges now reach the physical display edge. */
+  margin-inline: calc(0px - var(--bp-screen-gutter));
+  width: calc(100% + var(--bp-screen-gutter) + var(--bp-screen-gutter));
+  max-width: none;
+  padding-inline: 0;
+  scroll-padding-inline: 0;
   grid-auto-flow: column;
   grid-template-columns: none;
   grid-template-rows: repeat(var(--bp-rows, 2), minmax(0, 1fr));
@@ -1178,6 +1199,7 @@ pre {
 /* Responsive spacing for small Big Picture viewports. */
 @media (max-width: 720px) {
   .big-picture .bp-grid { padding: 32px; --bp-layout-gap: 12px; }
+  .big-picture.bp-scroll-horizontal .bp-grid { padding-inline: 0; }
   .big-picture .bp-grid .bp-card { padding: 5px; }
 }
 
