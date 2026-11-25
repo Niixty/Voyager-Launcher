@@ -50,7 +50,7 @@ async function openBigPicture() {
   const covers = [];
   const titles = [];
   const platforms = [];
-  let selected = 0, frame = 0, busy = false;
+  let selected = 0, frame = 0, busy = false, closing = false;
   let settingsOpen = false, settingsIndex = 0;
   let currentFamily = "", activePadIndex = null, saveChain = Promise.resolve();
   const heldByPad = new Map();
@@ -195,7 +195,12 @@ async function openBigPicture() {
     else if (cards[selected]) cards[selected].focus({ preventScroll: true });
     else settingsButton.focus({ preventScroll: true });
   }
-  function close() {
+  async function close() {
+    if (closing) return;
+    closing = true;
+    // When B closes fullscreen immediately after customization, guarantee
+    // every queued preference write has finished before leaving the view.
+    await saveChain.catch(() => {});
     cancelAnimationFrame(frame);
     document.removeEventListener("keydown", key, true);
     panel.remove();
@@ -221,6 +226,7 @@ async function openBigPicture() {
     }
   }
   function act(action) {
+    if (closing) return;
     if (action === "settings") { showSettings(!settingsOpen); return; }
     if (action === "back") {
       if (settingsOpen) showSettings(false);

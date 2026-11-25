@@ -383,12 +383,14 @@
     // Serialized writes must persist beyond the current fullscreen session.
     await wait(() => document.querySelector(".bp-settings-list"), "Configurações visíveis");
     let savedBp = await api.BigPictureOptions();
-    for (let retry = 0; retry < 30 && savedBp.view !== "cartridge"; retry++) {
+    const allSaved = () => savedBp.view === "cartridge" &&
+      savedBp.background === "solid" &&
+      savedBp.showTitle === false && savedBp.showPlatform === false;
+    for (let retry = 0; retry < 60 && !allSaved(); retry++) {
       await new Promise((r) => setTimeout(r, 100));
       savedBp = await api.BigPictureOptions();
     }
-    if (savedBp.view !== "cartridge" || savedBp.background !== "solid" ||
-        savedBp.showTitle !== false || savedBp.showPlatform !== false)
+    if (!allSaved())
       throw Error("Preferências do Big Picture não persistiram: " + JSON.stringify(savedBp));
     secondButtons[1].pressed = true;
     await wait(() => document.querySelector(".bp-settings").hidden,
