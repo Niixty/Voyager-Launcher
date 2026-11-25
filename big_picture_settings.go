@@ -17,6 +17,10 @@ type BigPictureOptions struct {
     View string `json:"view"` // grid | cartridge
     Background string `json:"background"` // hero | solid
     ButtonStyle string `json:"buttonStyle"` // auto | xbox | playstation (visual glyphs only)
+    ScrollDirection string `json:"scrollDirection"` // vertical | horizontal
+    Columns int `json:"columns"` // columns visible per page (1..8)
+    Rows int `json:"rows"` // rows visible per page (1..4)
+    IconSize int `json:"iconSize"` // image scale percentage (60..140)
     ShowTitle bool `json:"showTitle"`
     ShowPlatform bool `json:"showPlatform"`
     BlurBackground bool `json:"blurBackground"`
@@ -25,13 +29,22 @@ type BigPictureOptions struct {
 func defaultBigPictureOptions() BigPictureOptions {
     return BigPictureOptions{
         View:"grid",Background:"hero",ButtonStyle:"auto",ShowTitle:true,ShowPlatform:true,
-        BlurBackground:true,Dim:65,
+        BlurBackground:true,Dim:65,ScrollDirection:"vertical",Columns:4,Rows:2,IconSize:100,
     }
 }
 func (o BigPictureOptions) normalized() BigPictureOptions {
     if o.View!="grid" && o.View!="cartridge" {o.View="grid"}
     if o.Background!="hero" && o.Background!="solid" {o.Background="hero"}
     if o.ButtonStyle!="auto" && o.ButtonStyle!="xbox" && o.ButtonStyle!="playstation" {o.ButtonStyle="auto"}
+    if o.ScrollDirection!="vertical" && o.ScrollDirection!="horizontal" {o.ScrollDirection="vertical"}
+    if o.Columns<=0 {o.Columns=4}
+    if o.Columns>8 {o.Columns=8}
+    if o.Rows<=0 {o.Rows=2}
+    if o.Rows>4 {o.Rows=4}
+    if o.IconSize<=0 {o.IconSize=100}
+    if o.IconSize<60 {o.IconSize=60}
+    if o.IconSize>140 {o.IconSize=140}
+    o.IconSize=(o.IconSize+5)/10*10
     if o.Dim<10 {o.Dim=10}
     if o.Dim>90 {o.Dim=90}
     return o

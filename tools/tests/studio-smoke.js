@@ -353,6 +353,12 @@
           !computed.backdropFilter.includes("blur("))
         throw Error("Botão sem fundo translúcido com blur: " + name);
     }
+    // The vertical library scrolls without showing a Windows scrollbar.
+    const libraryGrid = document.querySelector(".bp-grid");
+    if (getComputedStyle(libraryGrid).scrollbarWidth !== "none" ||
+        getComputedStyle(libraryGrid).overflowY !== "auto" ||
+        getComputedStyle(libraryGrid).gridAutoFlow !== "row")
+      throw Error("Rolagem vertical sem barra não está ativa");
     const iconAPI = window.VoyagerGamepadIcons;
     if (!iconAPI || iconAPI.names.length !== 38)
       throw Error("Registro completo de ícones genéricos/Xbox/PlayStation ausente");
@@ -446,6 +452,27 @@
     await new Promise((r) => setTimeout(r, 110));
     if (!document.querySelector(".bp-controls img[src*='ps_x.png']"))
       throw Error("Forçar ícones PlayStation não alterou os botões visuais");
+    // The same preferences also work from a connected gamepad. Their
+    // dimensions must affect both cover variants without reloading images.
+    const layoutOption = (key) => {
+      const element = document.querySelector('.bp-setting[data-setting="' + key + '"]');
+      if (!element) throw Error("Configuração de layout ausente: " + key);
+      return element;
+    };
+    layoutOption("scrollDirection").click();
+    if (!document.querySelector(".big-picture").classList.contains("bp-scroll-horizontal") ||
+        getComputedStyle(libraryGrid).overflowX !== "auto" ||
+        getComputedStyle(libraryGrid).gridAutoFlow !== "column")
+      throw Error("Rolagem horizontal não ativou a trilha da biblioteca");
+    layoutOption("columns").click(); // 4 -> 5
+    for (let i = 0; i < 3; i++) layoutOption("rows").click(); // 2 -> 3 -> 4 -> 1
+    layoutOption("iconSize").click(); // 100% -> 110%
+    if (libraryGrid.style.getPropertyValue("--bp-columns") !== "5" ||
+        libraryGrid.style.getPropertyValue("--bp-rows") !== "1" ||
+        libraryGrid.style.getPropertyValue("--bp-icon-scale") !== "1.1")
+      throw Error("Colunas, linhas ou tamanho dos ícones não atualizaram");
+    if (getComputedStyle(libraryGrid.querySelector(".bp-cover")).transform === "none")
+      throw Error("Tamanho dos ícones não aplicou escala visual");
     const toggles = [
       ["background", "solid"], ["showTitle", false], ["showPlatform", false],
     ];
@@ -482,7 +509,9 @@
     const allSaved = () => savedBp.view === "cartridge" &&
       savedBp.background === "solid" &&
       savedBp.showTitle === false && savedBp.showPlatform === false &&
-      savedBp.buttonStyle === "playstation";
+      savedBp.buttonStyle === "playstation" &&
+      savedBp.scrollDirection === "horizontal" && savedBp.columns === 5 &&
+      savedBp.rows === 1 && savedBp.iconSize === 110;
     for (let retry = 0; retry < 60 && !allSaved(); retry++) {
       await new Promise((r) => setTimeout(r, 100));
       savedBp = await api.BigPictureOptions();
@@ -494,6 +523,17 @@
       "Botão B do segundo controle fecha apenas configurações");
     secondButtons[1].pressed = false;
     await new Promise((r) => setTimeout(r, 120));
+    // One horizontal row should make left/right select adjacent games.
+    secondButtons[14].pressed = true;
+    await wait(() => document.querySelectorAll(".bp-card")[0].classList.contains("selected"),
+      "Esquerda não selecionou o jogo anterior na rolagem horizontal");
+    secondButtons[14].pressed = false;
+    await new Promise((r) => setTimeout(r, 120));
+    secondButtons[15].pressed = true;
+    await wait(() => document.querySelectorAll(".bp-card")[1].classList.contains("selected"),
+      "Direita não selecionou o jogo seguinte na rolagem horizontal");
+    secondButtons[15].pressed = false;
+    await new Promise((r) => setTimeout(r, 120));
     secondButtons[1].pressed = true;
     await wait(() => !document.querySelector(".big-picture"), "Botão B fecha Big Picture");
     secondButtons[1].pressed = false;
@@ -503,6 +543,9 @@
       "Configuração persistida ao reabrir");
     if (!document.querySelector(".big-picture").classList.contains("bp-hide-title"))
       throw Error("Big Picture reabriu com títulos visíveis");
+    if (!document.querySelector(".big-picture").classList.contains("bp-scroll-horizontal") ||
+        document.querySelector(".bp-grid").style.getPropertyValue("--bp-icon-scale") !== "1.1")
+      throw Error("Direção e escala do layout não persistiram ao reabrir");
     if (document.querySelector(".big-picture").dataset.controller !== "playstation")
       throw Error("Padrão de botões PlayStation não foi recuperado ao abrir Big Picture");
     document.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape",bubbles:true,cancelable:true}));
