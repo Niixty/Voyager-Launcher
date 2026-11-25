@@ -22,6 +22,44 @@ async function openBigPicture() {
   const panel = el("section", null, "big-picture");
   panel.setAttribute("aria-label", "Big Picture");
   const background = el("div", null, "bp-hero-background");
+  // Original layered wave artwork: no video, canvas loop or external assets.
+  // CSS moves these paths very slowly while the standard background is active.
+  const waves = el("div", null, "bp-default-waves");
+  waves.setAttribute("aria-hidden", "true");
+  waves.innerHTML = `
+    <svg class="bp-waves-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" focusable="false">
+      <defs>
+        <linearGradient id="bp-wave-blue" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stop-color="#102d68" stop-opacity="0"/>
+          <stop offset=".32" stop-color="#2368cb" stop-opacity=".25"/>
+          <stop offset=".72" stop-color="#1d9deb" stop-opacity=".43"/>
+          <stop offset="1" stop-color="#223b99" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="bp-wave-cyan" x1="0" x2="1" y1="0" y2=".15">
+          <stop offset="0" stop-color="#2658c7" stop-opacity="0"/>
+          <stop offset=".48" stop-color="#44b7f2" stop-opacity=".24"/>
+          <stop offset="1" stop-color="#5b5ac3" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="bp-wave-violet" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stop-color="#193877" stop-opacity="0"/>
+          <stop offset=".56" stop-color="#5969c6" stop-opacity=".18"/>
+          <stop offset="1" stop-color="#172c75" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <g class="bp-wave-drift bp-wave-drift-back">
+        <path class="bp-wave-path" fill="url(#bp-wave-violet)" d="M-190 690 C200 410 370 800 770 530 S1330 370 1790 600 L1790 1020 L-190 1020 Z"/>
+        <path class="bp-wave-path" fill="url(#bp-wave-blue)" d="M-170 715 C120 540 340 820 690 635 S1300 435 1760 705 L1760 990 L-170 990 Z"/>
+      </g>
+      <g class="bp-wave-drift bp-wave-drift-front">
+        <path class="bp-wave-path" fill="url(#bp-wave-cyan)" d="M-180 780 C250 585 390 900 770 675 S1310 535 1790 730 L1790 1010 L-180 1010 Z"/>
+        <path class="bp-wave-path" fill="url(#bp-wave-blue)" d="M-180 855 C240 715 410 975 820 785 S1450 645 1790 820 L1790 1040 L-180 1040 Z"/>
+      </g>
+    </svg>`;
+  const heroLayers = [
+    el("div", null, "bp-hero-layer"),
+    el("div", null, "bp-hero-layer"),
+  ];
+  background.append(waves, ...heroLayers);
   const logo = el("img", null, "bp-logo");
   logo.src = "/icon.ico";
   logo.alt = "Voyager";
@@ -68,6 +106,7 @@ async function openBigPicture() {
   const accentCache = new Map();
   let accentRequestSerial = 0;
   const heldByPad = new Map();
+  let heroSlot = 0, heroRequestedId = "", heroSerial = 0;
 
   for (const [i, game] of rows.entries()) {
     const title = game.Config.title || game.ID;
@@ -171,6 +210,7 @@ async function openBigPicture() {
     grid.style.setProperty("--bp-columns", String(prefs.columns));
     grid.style.setProperty("--bp-rows", String(prefs.rows));
     grid.style.setProperty("--bp-icon-scale", String(prefs.iconSize / 100));
+    grid.style.setProperty("--bp-selected-scale", String(prefs.iconSize / 100 * 1.055));
     panel.classList.toggle("bp-hide-title", !prefs.showTitle);
     panel.classList.toggle("bp-hide-platform", !prefs.showPlatform);
     panel.classList.toggle("bp-blur-hero", prefs.blurBackground);
@@ -194,19 +234,53 @@ async function openBigPicture() {
         el("span", label), el("strong", value()), el("span", "Alterar", "bp-setting-arrow"),
       );
     });
+    refreshSelectionSpacing();
     if (cards[selected]) {
       cards[selected].scrollIntoView({ block: "nearest", inline: "nearest" });
     }
     refreshBackground();
     refreshGlyphs(lastDetectedFamily);
   }
+  function refreshSelectionSpacing() {
+    // Push only the immediate side neighbors, by a few pixels. Respect the
+    // different grid ordering in horizontal (column-first) mode.
+    for (const card of cards) {
+      card.classList.remove("bp-neighbor-left", "bp-neighbor-right");
+    }
+    if (!cards[selected]) return;
+    const horizontal = prefs.scrollDirection === "horizontal";
+    const left = selected - (horizontal ? prefs.rows : 1);
+    const right = selected + (horizontal ? prefs.rows : 1);
+    if (horizontal || selected % prefs.columns !== 0) {
+      cards[left]?.classList.add("bp-neighbor-left");
+    }
+    if (horizontal || selected % prefs.columns !== prefs.columns - 1) {
+      cards[right]?.classList.add("bp-neighbor-right");
+    }
+  }
   function refreshBackground() {
-    background.replaceChildren();
-    if (prefs.background !== "hero" || !rows[selected]) return;
-    const art = image(rows[selected].ID, "hero");
+    const solid = prefs.background !== "hero";
+    panel.classList.toggle("bp-default-background", solid);
+    if (solid || !rows[selected]) return;
+    const id = rows[selected].ID;
+    // Do not reload the Hero when adjusting visual settings.
+    if (id === heroRequestedId) return;
+    heroRequestedId = id;
+    const serial = ++heroSerial;
+    const nextSlot = 1 - heroSlot;
+    const art = image(id, "hero");
     art.alt = "";
-    art.onerror = () => art.remove();
-    background.append(art);
+    art.onload = () => {
+      if (serial !== heroSerial || !panel.isConnected || prefs.background !== "hero") return;
+      heroLayers[nextSlot].classList.add("is-active");
+      heroLayers[heroSlot].classList.remove("is-active");
+      heroSlot = nextSlot;
+    };
+    art.onerror = () => {
+      if (serial === heroSerial) heroRequestedId = "";
+      art.remove();
+    };
+    heroLayers[nextSlot].replaceChildren(art);
   }
   function refreshGlyphs(detectedFamily) {
     lastDetectedFamily = detectedFamily || "xbox";
@@ -264,6 +338,7 @@ async function openBigPicture() {
     selected = index;
     platformHeading.textContent = rows[index]?.Config?.platform?.trim() || "Biblioteca de jogos";
     cards[index].classList.add("selected");
+    refreshSelectionSpacing();
     if (focus) cards[index].focus({ preventScroll: true });
     cards[index].scrollIntoView({ block: "nearest", inline: "nearest" });
     refreshBackground();
