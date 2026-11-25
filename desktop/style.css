@@ -1016,9 +1016,26 @@ pre {
   overscroll-behavior: contain;
   scroll-behavior: smooth;
 }
-/* Adjustable cartridge-to-cartridge spacing in both scroll orientations. */
+/* No invisible padding between 80%-size cart images: use compact grid
+   tracks, then render the image at its original visual size within the track.
+   A zero-pixel gap truly puts the cartridge bounding boxes next to each other. */
 .big-picture.bp-cartridges .bp-grid {
   --bp-layout-gap: var(--bp-cartridge-spacing, 24px);
+  justify-content: start;
+}
+.big-picture.bp-cartridges:not(.bp-scroll-horizontal) .bp-grid {
+  grid-template-columns: repeat(var(--bp-columns, 4), minmax(0,
+    calc((100% - (var(--bp-columns, 4) - 1) * var(--bp-layout-gap))
+      / var(--bp-columns, 4) * var(--bp-cartridge-track-scale, .8))));
+  grid-auto-rows: max(104px,
+    calc((100% - (var(--bp-rows, 2) - 1) * var(--bp-layout-gap))
+      / var(--bp-rows, 2) * var(--bp-cartridge-track-scale, .8)));
+  justify-content: center;
+}
+.big-picture.bp-cartridges.bp-scroll-horizontal .bp-grid {
+  grid-auto-columns: max(104px,
+    calc((100% - (var(--bp-columns, 4) - 1) * var(--bp-layout-gap))
+      / var(--bp-columns, 4) * var(--bp-cartridge-track-scale, .8)));
 }
 .big-picture .bp-grid::-webkit-scrollbar {
   display: none;
@@ -1082,7 +1099,9 @@ pre {
   outline: none;
 }
 .bp-cartridges .bp-card {
-  padding: .4em;
+  /* The grid gap is the ONLY spacing. Hidden button padding was another
+     ~20px gap, even when "Espaçamento dos cartuchos" showed zero. */
+  padding: 0;
   /* The global button transition otherwise keeps the old selected blue
      background visible for ~140 ms after changing to cartridge mode. */
   transition: none;
@@ -1097,15 +1116,20 @@ pre {
 }
 /* Subtle focus lift (5.5%) and only a 7px separation of its side neighbors.
    Transition the artwork instead of the whole grid to avoid relayout jumps. */
+.big-picture.bp-cartridges .bp-grid .bp-cover {
+  transform: scale(var(--bp-cartridge-visual-scale, 1));
+}
 .big-picture.bp-cartridges .bp-grid .bp-card.selected .bp-cover {
-  transform: scale(var(--bp-selected-scale, .844));
+  transform: scale(var(--bp-cartridge-visual-selected-scale, 1.055));
   z-index: 2;
 }
 .big-picture.bp-cartridges .bp-grid .bp-card.bp-neighbor-left .bp-cover {
-  transform: translate3d(-7px, 0, 0) scale(var(--bp-icon-scale, .8));
+  transform: translate3d(calc(0px - var(--bp-neighbor-push, 7px)), 0, 0)
+    scale(var(--bp-cartridge-visual-scale, 1));
 }
 .big-picture.bp-cartridges .bp-grid .bp-card.bp-neighbor-right .bp-cover {
-  transform: translate3d(7px, 0, 0) scale(var(--bp-icon-scale, .8));
+  transform: translate3d(var(--bp-neighbor-push, 7px), 0, 0)
+    scale(var(--bp-cartridge-visual-scale, 1));
 }
 .bp-cartridges .bp-cover img {
   object-fit: contain;
@@ -1217,6 +1241,7 @@ pre {
   .big-picture .bp-grid { padding: 32px; --bp-layout-gap: 12px; }
   .big-picture.bp-scroll-horizontal .bp-grid { padding-inline: 0; }
   .big-picture .bp-grid .bp-card { padding: 5px; }
+  .big-picture.bp-cartridges .bp-grid .bp-card { padding: 0; }
 }
 
 /* Motion remains optional for accessibility and low-power streaming clients. */
