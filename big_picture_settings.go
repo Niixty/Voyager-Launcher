@@ -17,6 +17,7 @@ type BigPictureOptions struct {
     View string `json:"view"` // grid | cartridge
     Background string `json:"background"` // hero | solid
     ButtonStyle string `json:"buttonStyle"` // auto | xbox | playstation (visual glyphs only)
+    DefaultBackgroundHeroColor bool `json:"defaultBackgroundHeroColor"` // tint standard waves using selected Hero
     ScrollDirection string `json:"scrollDirection"` // vertical | horizontal
     Columns int `json:"columns"` // columns visible per page (1..8)
     Rows int `json:"rows"` // rows visible per page (1..4)
