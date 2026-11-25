@@ -270,3 +270,26 @@ Para instalações cuja pasta não contém os scripts, atualize o repositório
 local e execute **ATIVAR-SINCRONIZACAO.cmd** uma vez para registrar a nova
 ação; isso substitui a antiga tarefa sem alterar os arquivos do jogo.
 A verificação do EXE `Voyager-EXE-Update` continua em segundo plano.
+
+
+### Animação do cartucho com alvo de 60 FPS (sem travadas ao atualizar o progresso)
+
+A animação do Cartucho/Grid foi separada em duas etapas:
+**preparo dos pixels** e **apresentação Win32**. O processamento do
+preenchimento colorido (inclusive a borda suave e a transparência do PNG)
+agora acontece em uma goroutine independente. Ela sempre recebe a
+porcentagem mais recente e descarta valores intermediários, evitando a
+acumulação de quadros atrasados.
+
+A thread da janela mantém quatro versões *subpixel* do mesmo sprite em
+bitmaps DIB pré-alocados e usa `AlphaBlend` em cada quadro. A memória
+desses bitmaps é reaproveitada; o antigo ciclo de recriar contextos GDI+
+e três ou quatro sprites a cada porcentagem foi removido do caminho
+de animação. O fundo Hero e os textos estáticos permanecem em cache;
+alterações de progresso invalidam apenas o cartucho e o campo numérico.
+
+No Windows, a precisão do relógio é elevada temporariamente enquanto
+a animação está ativa e restaurada quando a tela é fechada. A meta é
+**60 Hz**, mas o FPS real depende do compositor do Windows, da máquina
+e do Moonlight. O teste de loading ainda encerra após 10 segundos ou
+com Esc e mantém o watchdog contra travamentos.

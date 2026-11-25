@@ -3,6 +3,7 @@
 package main
 
 import (
+    "fmt"
     "image"
     "math"
     "syscall"
@@ -26,9 +27,14 @@ type overlayBackbuffer struct {
     source *image.NRGBA
     glowRadius, spritePercent int
     spriteFailed bool
-    alphaFrames [3]overlayAlphaFrame
+    alphaFrames [4]overlayAlphaFrame
     haloFrame overlayAlphaFrame
     alphaReady bool
+    spriteRequests chan overlaySpriteRequest
+    spriteResults chan overlaySpriteResult
+    spriteDone chan struct{}
+    spriteRequestedPercent int
+    spriteRequestedFailed bool
     x, w, h int
     baseY, scale float64
     motion rect
@@ -57,6 +63,7 @@ func (b *overlayBackbuffer) release() {
     b.sprite.close()
     b.foreground.close()
     b.halo.close()
+    if b.spriteDone!=nil {close(b.spriteDone);b.spriteDone=nil}
     b.haloFrame.release()
     for i:=range b.alphaFrames {b.alphaFrames[i].release()}
     if b.staticDC!=0 {
@@ -91,7 +98,7 @@ var (
 // Cache four pre-multiplied alpha sprites with quarter-pixel offsets.
 // Each animated frame uses a fast GDI AlphaBlend instead of costly GDI+
 // image scaling; transparent cartridge backgrounds are preserved.
-type overlayAlphaFrame struct {dc, bitmap, previous uintptr}
+type overlayAlphaFrame struct {dc, bitmap, previous, pixels uintptr}
 func (f *overlayAlphaFrame) release() {
     if f.dc!=0 {
         call(pSelectObject,f.dc,f.previous)
@@ -188,30 +195,124 @@ func (b *overlayBackbuffer) prepareSprite(o *overlayState) {
             b.haloFrame=frame
         }
     }
-    b.spritePercent=-1
-    b.updateSprite(o)
-}
-func (b *overlayBackbuffer) updateSprite(o *overlayState) {
-    if b.source==nil{return}
-    failed:=o.fail!=""
-    if b.sprite!=nil && b.spritePercent==o.percent && b.spriteFailed==failed{return}
-    tinted,err:=loadingBitmap(loadingprogress.Blend(b.source,o.percent,loadingAccent(o.accent,failed)))
-    if err!=nil{return}
-    for i:=range b.alphaFrames {b.alphaFrames[i].release()}
-    b.alphaReady=false
-    b.sprite.close()
-    b.sprite=tinted
-    b.spritePercent=o.percent
-    b.spriteFailed=failed
+    // Stable backbuffer even when async tint calculation has not completed.
+    if image,e:=loadingBitmap(loadingprogress.Blend(source,o.percent,accent));e==nil {b.sprite=image}
     for i:=range b.alphaFrames {
-        frame,ok:=rasterizedAlphaFrame(tinted,b.w,b.h,float64(i)/float64(len(b.alphaFrames)))
+        frame,ok:=createReusableAlphaFrame(b.w,b.h)
         if !ok {
             for j:=range b.alphaFrames {b.alphaFrames[j].release()}
-            return // GDI+ fallback draws the correct colored sprite.
+            return // The GDI+ fallback still renders the original sprite.
         }
         b.alphaFrames[i]=frame
     }
-    b.alphaReady=true
+    b.startSpriteWorker(o.accent)
+    b.updateSprite(o)
+}
+
+// The tinted sprite is calculated outside WM_PAINT, and each phase is copied
+// into a reusable top-down DIB only once the worker delivers completed pixels.
+type overlaySpriteRequest struct {percent int; failed bool}
+type overlaySpriteResult struct {
+    percent int
+    failed bool
+    frames [][]byte
+}
+
+func createReusableAlphaFrame(w,h int)(overlayAlphaFrame,bool) {
+    info:=overlayBitmapInfo{Size:40,Width:int32(w),Height:-int32(h+2),Planes:1,BitCount:32}
+    var memory uintptr
+    bitmap:=call(createDIBSection,0,uintptr(unsafe.Pointer(&info)),0,uintptr(unsafe.Pointer(&memory)),0,0)
+    if bitmap==0||memory==0{return overlayAlphaFrame{},false}
+    dc:=call(pCreateCompatibleDC,0)
+    if dc==0 {call(pDeleteObject,bitmap);return overlayAlphaFrame{},false}
+    previous:=call(pSelectObject,dc,bitmap)
+    if previous==0||previous==^uintptr(0) {
+        call(pDeleteDC,dc)
+        call(pDeleteObject,bitmap)
+        return overlayAlphaFrame{},false
+    }
+    return overlayAlphaFrame{dc:dc,bitmap:bitmap,previous:previous,pixels:memory},true
+}
+
+func (b *overlayBackbuffer) startSpriteWorker(accent uint32) {
+    if b.source==nil || b.spriteRequests!=nil{return}
+    b.spriteRequests=make(chan overlaySpriteRequest,1)
+    b.spriteResults=make(chan overlaySpriteResult,1)
+    b.spriteDone=make(chan struct{})
+    b.spriteRequestedPercent=-1
+    source:=b.source // immutable for the worker's lifetime
+    requests:=b.spriteRequests
+    results:=b.spriteResults
+    done:=b.spriteDone
+    phases:=len(b.alphaFrames)
+    go func(){
+        for {
+            var request overlaySpriteRequest
+            select {
+            case <-done:return
+            case request=<-requests:
+            }
+            // Drop intermediate percentages. Only the newest tint matters;
+            // animation frames themselves still run at display refresh rate.
+            for {
+                select {
+                case request=<-requests:
+                default:goto prepare
+                }
+            }
+        prepare:
+            tinted:=loadingprogress.Blend(source,request.percent,loadingAccent(accent,request.failed))
+            frames:=loadingprogress.PremultipliedFrames(tinted,phases)
+            if len(frames)!=phases{continue}
+            ready:=overlaySpriteResult{percent:request.percent,failed:request.failed,frames:frames}
+            select {
+            case <-done:return
+            case results<-ready:
+            default:
+                select{case <-results:default:}
+                select{case <-done:return;case results<-ready:default:}
+            }
+        }
+    }()
+}
+
+func (b *overlayBackbuffer) updateSprite(o *overlayState) {
+    if b.spriteRequests==nil{return}
+    request:=overlaySpriteRequest{percent:o.percent,failed:o.fail!=""}
+    if request.percent!=b.spriteRequestedPercent || request.failed!=b.spriteRequestedFailed {
+        b.spriteRequestedPercent=request.percent
+        b.spriteRequestedFailed=request.failed
+        select {
+        case b.spriteRequests<-request:
+        default:
+            select{case <-b.spriteRequests:default:}
+            select{case b.spriteRequests<-request:default:}
+        }
+    }
+    // A ready image replaces the active sprite without any GDI+ rasterization.
+    // Copying into preallocated DIB memory is much faster than recreating 4
+    // GDI+ graphics contexts and their AlphaBlend sources for every 4%.
+    for {
+        select {
+        case next:=<-b.spriteResults:
+            if next.percent!=o.percent || next.failed!=(o.fail!="") {continue}
+            expected:=b.w*(b.h+2)*4
+            if len(next.frames)!=len(b.alphaFrames){continue}
+            valid:=true
+            for i,frame:=range b.alphaFrames {
+                if frame.pixels==0 || len(next.frames[i])!=expected {valid=false;break}
+            }
+            if !valid{continue}
+            for i,frame:=range b.alphaFrames {
+                dest:=unsafe.Slice((*byte)(unsafe.Pointer(frame.pixels)),expected)
+                copy(dest,next.frames[i])
+            }
+            b.alphaReady=true
+            b.spritePercent=next.percent
+            b.spriteFailed=next.failed
+        default:return
+        }
+    }
 }
 
 func (o *overlayState) invalidateMotion(){
@@ -256,15 +357,17 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
     }
 
     failed:=o.fail!=""
-    if !b.valid || b.cachedPercent!=o.percent || b.cachedPhase!=o.phase ||
+    b.updateSprite(o)
+    if !b.valid || b.cachedPhase!=o.phase ||
         b.cachedDetail!=o.detail || b.cachedFailed!=failed {
         p:=paintFromHDC(b.staticDC)
-        below:=o.layout
+        below:=o.layout.Clone()
+        below.Elements=withoutDynamicPercent(below.Elements)
         if o.cartOverlapsForeground() {
             for i,n:=range o.layout.Elements {
                 if n.ID!=ll.Cartridge{continue}
-                above:=o.layout
-                above.Elements=above.Elements[i+1:]
+                above:=o.layout.Clone()
+                above.Elements=withoutDynamicPercent(above.Elements[i+1:])
                 fp,handle,err:=newBitmapGraphics(width,height)
                 if err!=nil{
                     p.close()
@@ -277,13 +380,14 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
                 fp.close()
                 b.foreground.close()
                 b.foreground=&img{handle,width,height}
-                below.Elements=below.Elements[:i]
+                for j,entry:=range below.Elements {
+                    if entry.ID==ll.Cartridge {below.Elements=below.Elements[:j];break}
+                }
                 break
             }
         }
         drawOverlay(p,o.cfg,0,0,width,height,o.percent,o.phase,o.detail,nil,o.background,o.accent,0,below,failed)
         p.close()
-        b.updateSprite(o)
         b.cachedPercent=o.percent
         b.cachedPhase=o.phase
         b.cachedDetail=o.detail
@@ -323,14 +427,18 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
             }
         }
         usedFastPath:=false
-        if b.alphaReady && scale==1 {
-            base:=math.Floor(position)
-            fraction:=position-base
+        if b.alphaReady {
+            base:=math.Floor(drawY)
+            fraction:=drawY-base
             phase:=int(fraction*float64(len(b.alphaFrames)))
+            if phase<0{phase=0}
             if phase>=len(b.alphaFrames){phase=len(b.alphaFrames)-1}
             source:=b.alphaFrames[phase]
-            usedFastPath=call(alphaBlend,b.dc,uintptr(b.x),uintptr(int(base)-1),uintptr(b.w),uintptr(b.h+2),
-                source.dc,0,0,uintptr(b.w),uintptr(b.h+2),0x01FF0000)!=0
+            dw:=int(math.Max(1,math.Round(drawW)))
+            dh:=int(math.Max(1,math.Round(drawH)))+2
+            usedFastPath=call(alphaBlend,b.dc,uintptr(int(math.Round(drawX))),uintptr(int(base)-1),
+                uintptr(dw),uintptr(dh),source.dc,0,0,uintptr(b.w),
+                uintptr(b.h+2),0x01FF0000)!=0
         }
         if !usedFastPath || b.foreground!=nil {
             p:=paintFromHDC(b.dc)
@@ -344,13 +452,80 @@ func (o *overlayState) paintBuffered(hwnd,windowDC uintptr,width,height int,dama
             p.close()
         }
     }
+    percentArea:=o.percentageRect(width,height)
+    if intersectsRect(damage,percentArea) && percentArea.w()>0 {
+        p:=paintFromHDC(b.dc)
+        o.drawDynamicPercent(p,width,height)
+        p.close()
+    }
     call(pBitBlt,windowDC,x,y,w,h,b.dc,x,y,SRCCOPY)
+}
+
+
+func withoutDynamicPercent(elements []ll.Element) []ll.Element {
+    kept:=make([]ll.Element,0,len(elements))
+    for _,element:=range elements {if element.ID!=ll.Percentage{kept=append(kept,element)}}
+    return kept
+}
+func intersectsRect(a,b rect)bool{
+    return a.Left<b.Right && a.Right>b.Left && a.Top<b.Bottom && a.Bottom>b.Top
+}
+func (o *overlayState) percentageRect(width,height int) rect {
+    n:=o.layout.Find(ll.Percentage)
+    if n==nil||!n.Visible||!appPrefs.ShowPercentage{return rect{}}
+    scale:=math.Min(2.6,math.Min(float64(width)/ll.VirtualWidth,float64(height)/ll.VirtualHeight))
+    left:=(float64(width)-ll.VirtualWidth*scale)/2
+    top:=(float64(height)-ll.VirtualHeight*scale)/2
+    x:=int(math.Round(left+n.X*scale))
+    y:=int(math.Round(top+n.Y*scale))
+    w:=int(math.Max(1,math.Round(n.W*scale)))
+    h:=int(math.Max(1,math.Round(n.H*scale)))
+    return rect{Left:int32(x-2),Top:int32(y-2),Right:int32(x+w+2),Bottom:int32(y+h+2)}
+}
+func (o *overlayState) drawDynamicPercent(p *painter,width,height int) {
+    n:=o.layout.Find(ll.Percentage)
+    if n==nil||!n.Visible||!appPrefs.ShowPercentage{return}
+    area:=o.percentageRect(width,height)
+    scale:=math.Min(2.6,math.Min(float64(width)/ll.VirtualWidth,float64(height)/ll.VirtualHeight))
+    color:=overlayTheme.Color("percentage")
+    switch n.Color {
+    case "white":color=overlayTheme.Color("gameTitle")
+    case "muted":color=overlayTheme.Color("status")
+    case "hero":color=o.accent
+    }
+    p.textAligned(int(area.Left)+2,int(area.Top)+2,int(area.w())-4,int(area.h())-4,
+        fmt.Sprintf("%d%%",o.percent),n.FontSize*float32(scale),
+        palette(color),false,n.TextAlign,n.VerticalAlign)
+}
+func (o *overlayState) invalidateProgress() {
+    for _,hw:=range o.windows {
+        b:=o.buffers[hw]
+        if b==nil {invalid(hw);continue}
+        if b.sprite!=nil {call(pInvalidate,hw,uintptr(unsafe.Pointer(&b.motion)),0)}
+        area:=o.percentageRect(b.width,b.height)
+        if area.w()>0 && area.h()>0 {
+            call(pInvalidate,hw,uintptr(unsafe.Pointer(&area)),0)
+        }
+    }
 }
 
 // Cache the usual disjoint layout. When a later layer crosses the floating cart,
 // compose in document order so the editor, screenshot and stream agree.
 func(o *overlayState) cartOverlapsForeground()bool{
  var cart *ll.Element
- for i:=range o.layout.Elements{n:=&o.layout.Elements[i];if n.ID==ll.Cartridge{if !n.Visible||o.cartridge==nil{return false};cart=n;continue};if cart!=nil && (n.Visible||o.fail!=""&&n.ID==ll.Phase) && n.X<cart.X+cart.W && n.X+n.W>cart.X && n.Y<cart.Y+cart.H+11 && n.Y+n.H>cart.Y-11{return true}}
+ for i:=range o.layout.Elements{
+    n:=&o.layout.Elements[i]
+    if n.ID==ll.Cartridge{
+        if !n.Visible || o.cartridge==nil{return false}
+        cart=n
+        continue
+    }
+    // Percentage is painted dynamically after the sprite, not baked into
+    // a full-screen foreground layer. This keeps the 60 Hz path lightweight.
+    if n.ID==ll.Percentage {continue}
+    if cart!=nil && (n.Visible || o.fail!="" && n.ID==ll.Phase) &&
+        n.X<cart.X+cart.W && n.X+n.W>cart.X &&
+        n.Y<cart.Y+cart.H+11 && n.Y+n.H>cart.Y-11 {return true}
+}
  return false
 }

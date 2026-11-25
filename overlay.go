@@ -86,6 +86,14 @@ const (
 
 var overlayClassName = syscall.StringToUTF16Ptr("VoyagerLoadingNativeV6")
 
+// Request precise pacing while the icon is animated, avoiding the
+// default Windows timer's uneven 15/31 ms scheduling intervals.
+var (
+    winmm = syscall.NewLazyDLL("winmm.dll")
+    timeBeginPeriod = winmm.NewProc("timeBeginPeriod")
+    timeEndPeriod = winmm.NewProc("timeEndPeriod")
+)
+
 func overlayWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 	switch m {
 	case WM_PAINT:
@@ -450,7 +458,10 @@ func (o *overlayState) startFrameClock() {
     }
     // Business logic must not depend on WM_TIMER: Windows dispatches WM_TIMER
     // only when the queue is idle, which can starve during heavy rendering.
+    preciseClock:=false
+    if hasSprite {preciseClock=call(timeBeginPeriod,1)==0}
     go func(){
+        if preciseClock {defer call(timeEndPeriod,1)}
         tickTicker:=time.NewTicker(50*time.Millisecond)
         defer tickTicker.Stop()
         var motionTicker *time.Ticker
@@ -865,7 +876,7 @@ func (o *overlayState) tick() {
         if progress!=o.percent {
             o.percent=progress
             if progress==100 && o.completedAt.IsZero(){o.completedAt=now}
-            o.invalidateAll()
+            o.invalidateProgress()
         }
         return
     }
@@ -941,10 +952,14 @@ func (o *overlayState) tick() {
             v:=70+((raw-70)/4)*4
             if raw>=95 {v=95}
 			if v != o.percent {
-				o.percent = v
-				o.phase = "Confirmando imagem do jogo"
-				o.invalidateAll()
-			}
+                o.percent=v
+                if o.phase!="Confirmando imagem do jogo" {
+                    o.phase="Confirmando imagem do jogo"
+                    o.invalidateAll()
+                } else {
+                    o.invalidateProgress()
+                }
+            }
 		}
 	} else {
 		if o.targetHWND != 0 {
