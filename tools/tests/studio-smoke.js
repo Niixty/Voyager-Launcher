@@ -547,6 +547,25 @@
       "Visualização de cartucho");
     if (getComputedStyle(libraryGrid).columnGap !== "32px")
       throw Error("Espaçamento configurado não foi aplicado aos cartuchos");
+    // Previous versions only shrunk the image with transform(scale(.8));
+    // even at 0px gap, the full-width empty grid cells remained between
+    // cartridges. Verify the *physical card bounds* truly touch at 0px.
+    const configuredGap = libraryGrid.style.getPropertyValue("--bp-cartridge-spacing");
+    libraryGrid.style.setProperty("--bp-cartridge-spacing", "0px");
+    const zeroGapStyle = getComputedStyle(libraryGrid);
+    const firstCardBounds = libraryGrid.querySelectorAll(".bp-card")[0].getBoundingClientRect();
+    const secondCardBounds = libraryGrid.querySelectorAll(".bp-card")[1].getBoundingClientRect();
+    if (zeroGapStyle.columnGap !== "0px" ||
+        Math.abs(secondCardBounds.left - firstCardBounds.right) > 1.5 ||
+        parseFloat(libraryGrid.style.getPropertyValue("--bp-cartridge-track-scale")) !== 0.88 ||
+        parseFloat(libraryGrid.style.getPropertyValue("--bp-neighbor-push")) > 7)
+      throw Error("Espaçamento 0px ainda deixa faixa vazia entre cartuchos: " +
+        JSON.stringify({gap:zeroGapStyle.columnGap, first:firstCardBounds.right,
+          second:secondCardBounds.left, trackScale:libraryGrid.style.getPropertyValue("--bp-cartridge-track-scale")}));
+    const unscaledSlot = libraryGrid.clientWidth / 5;
+    if (unscaledSlot > 130 && firstCardBounds.width >= unscaledSlot * .96)
+      throw Error("Cartuchos ainda ocupam células largas da escala antiga com espaço invisível");
+    libraryGrid.style.setProperty("--bp-cartridge-spacing", configuredGap);
     if (!picture.classList.contains("bp-default-background") ||
         (waveStyle().animationName !== "none" && waveStyle().animationPlayState !== "running"))
       throw Error("Fundo padrão deve ativar as ondas animadas (exceto movimento reduzido)");
