@@ -488,6 +488,19 @@
         getComputedStyle(libraryGrid).overflowX !== "auto" ||
         getComputedStyle(libraryGrid).gridAutoFlow !== "column")
       throw Error("Rolagem horizontal não ativou a trilha da biblioteca");
+    // Regression: the horizontal 3-column / 1-row cartridge strip must be
+    // full bleed. Neither the first nor last glow may hit an inset clipping
+    // edge ~5vw from the physical monitor boundary.
+    libraryGrid.style.setProperty("--bp-columns", "3");
+    libraryGrid.style.setProperty("--bp-rows", "1");
+    const bounds = libraryGrid.getBoundingClientRect();
+    if (bounds.left > 2 || bounds.right < window.innerWidth - 2 ||
+        parseFloat(getComputedStyle(libraryGrid).paddingLeft) !== 0 ||
+        parseFloat(getComputedStyle(libraryGrid).paddingRight) !== 0)
+      throw Error("Carrossel horizontal 3x1 ainda corta o brilho antes das bordas da tela: " +
+        JSON.stringify({left:bounds.left,right:bounds.right,screen:window.innerWidth}));
+    libraryGrid.style.setProperty("--bp-columns", "4");
+    libraryGrid.style.setProperty("--bp-rows", "2");
     layoutOption("columns").click(); // 4 -> 5
     for (let i = 0; i < 3; i++) layoutOption("rows").click(); // 2 -> 3 -> 4 -> 1
     layoutOption("iconSize").click(); // 100% -> 110%
@@ -505,6 +518,13 @@
       if (!option) throw Error("Opção do Big Picture ausente: " + key);
       option.click();
     }
+    layoutOption("defaultBackgroundHeroColor").click();
+    if (!picture.classList.contains("bp-wave-follows-hero") ||
+        !ambientWaves.style.getPropertyValue("--bp-wave-deep").startsWith("hsl(") ||
+        !ambientWaves.style.getPropertyValue("--bp-wave-mid").startsWith("hsl(") ||
+        !ambientWaves.style.getPropertyValue("--bp-wave-light").startsWith("hsl(") ||
+        !ambientWaves.style.getPropertyValue("--bp-wave-hue-shift").endsWith("deg"))
+      throw Error("Ondas não seguiram a cor predominante da Hero selecionada");
     await wait(() => document.querySelector(".big-picture").classList.contains("bp-cartridges"),
       "Visualização de cartucho");
     if (!picture.classList.contains("bp-default-background") ||
@@ -540,7 +560,8 @@
       savedBp.showTitle === false && savedBp.showPlatform === false &&
       savedBp.buttonStyle === "playstation" &&
       savedBp.scrollDirection === "horizontal" && savedBp.columns === 5 &&
-      savedBp.rows === 1 && savedBp.iconSize === 110;
+      savedBp.rows === 1 && savedBp.iconSize === 110 &&
+      savedBp.defaultBackgroundHeroColor === true;
     for (let retry = 0; retry < 60 && !allSaved(); retry++) {
       await new Promise((r) => setTimeout(r, 100));
       savedBp = await api.BigPictureOptions();
@@ -578,6 +599,9 @@
     if (!document.querySelector(".big-picture").classList.contains("bp-default-background") ||
         document.querySelector(".bp-default-waves")?.querySelectorAll(".bp-wave-path").length < 3)
       throw Error("Fundo animado não foi restaurado ao reabrir");
+    if (!document.querySelector(".big-picture").classList.contains("bp-wave-follows-hero") ||
+        !document.querySelector(".bp-default-waves").style.getPropertyValue("--bp-wave-hue-shift"))
+      throw Error("A cor da Hero do fundo padrão não persistiu ao reabrir");
     if (document.querySelector(".big-picture").dataset.controller !== "playstation")
       throw Error("Padrão de botões PlayStation não foi recuperado ao abrir Big Picture");
     document.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape",bubbles:true,cancelable:true}));
