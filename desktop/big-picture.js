@@ -52,7 +52,7 @@ async function openBigPicture() {
   const platforms = [];
   let selected = 0, frame = 0, busy = false;
   let settingsOpen = false, settingsIndex = 0;
-  let currentFamily = "", saveChain = Promise.resolve();
+  let currentFamily = "", activePadIndex = null, saveChain = Promise.resolve();
   const heldByPad = new Map();
 
   for (const [i, game] of rows.entries()) {
@@ -267,6 +267,7 @@ async function openBigPicture() {
     const pads = navigator.getGamepads?.() || [];
     let candidate = "";
     let family = "";
+    let candidateIndex = null;
     let defaultFamily = "";
     const seen = new Set();
     for (let index = 0; index < pads.length; index++) {
@@ -288,19 +289,24 @@ async function openBigPicture() {
       const directional = ["left", "right", "up", "down"].includes(action);
       if (!last || last.action !== action) {
         heldByPad.set(index, { action, repeatAt: now + 390 });
-        if (!candidate) { candidate = action; family = iconPack?.detect(pad) || "xbox"; }
+        if (!candidate) { candidate = action; candidateIndex = index; family = iconPack?.detect(pad) || "xbox"; }
       } else if (directional && now >= last.repeatAt) {
         last.repeatAt = now + 155;
-        if (!candidate) { candidate = action; family = iconPack?.detect(pad) || "xbox"; }
+        if (!candidate) { candidate = action; candidateIndex = index; family = iconPack?.detect(pad) || "xbox"; }
       }
     }
     for (const index of heldByPad.keys()) {
       if (!seen.has(index)) heldByPad.delete(index);
     }
     if (candidate) {
+      activePadIndex = candidateIndex;
       refreshGlyphs(family);
       act(candidate);
+    } else if (activePadIndex !== null && seen.has(activePadIndex)) {
+      // Keep the last controller's icons even with controller 0 idle.
+      refreshGlyphs(iconPack?.detect(pads[activePadIndex]) || "xbox");
     } else if (defaultFamily && heldByPad.size === 0) {
+      activePadIndex = null;
       refreshGlyphs(defaultFamily);
     }
   }
