@@ -178,17 +178,16 @@ async function openBigPicture() {
     for (let i = 0; i < covers.length; i++) {
       const game = rows[i], cover = covers[i];
       const kind = prefs.view === "cartridge" ? "cartridge" : "grid";
+      // Changing rows/columns/size should not reload artwork and flicker.
+      if (cover.dataset.kind === kind) continue;
       const img = image(game.ID, kind);
       if (kind === "cartridge") {
         img.onerror = () => {
           if (img.isConnected) img.replaceWith(image(game.ID, "grid"));
         };
       }
-      // Changing rows/columns/size should not reload every image and flicker.
-      if (cover.dataset.kind !== kind) {
-        cover.replaceChildren(el("span", (game.Config.title || game.ID).slice(0, 1)), img);
-        cover.dataset.kind = kind;
-      }
+      cover.replaceChildren(el("span", (game.Config.title || game.ID).slice(0, 1)), img);
+      cover.dataset.kind = kind;
     }
     optionSpecs.forEach(([key, label, value], i) => {
       settingsButtons[i].replaceChildren(
