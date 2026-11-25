@@ -355,6 +355,19 @@
     }
     // The vertical library scrolls without showing a Windows scrollbar.
     const libraryGrid = document.querySelector(".bp-grid");
+    const picture = document.querySelector(".big-picture");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const ambientWaves = document.querySelector(".bp-default-waves");
+    const heroLayers = document.querySelectorAll(".bp-hero-layer");
+    if (!ambientWaves || ambientWaves.querySelectorAll(".bp-wave-path").length < 3 ||
+        heroLayers.length !== 2 ||
+        picture.classList.contains("bp-default-background"))
+      throw Error("Hero em duas camadas ou ondas vetoriais do fundo padrão ausentes");
+    const waveStyle = () => getComputedStyle(ambientWaves.querySelector(".bp-wave-drift"));
+    // Windows can enable reduced motion on CI: the CSS then removes the
+    // animation entirely, so playState is not required to say "paused".
+    if (waveStyle().animationName !== "none" && waveStyle().animationPlayState !== "paused")
+      throw Error("Ondas deveriam ficar pausadas quando a Hero está ativa");
     if (getComputedStyle(libraryGrid).scrollbarWidth !== "none" ||
         getComputedStyle(libraryGrid).overflowY !== "auto" ||
         getComputedStyle(libraryGrid).gridAutoFlow !== "row")
@@ -383,6 +396,17 @@
     await wait(() => document.querySelectorAll(".bp-card")[1].matches(".selected"), "Direcional");
     if (document.querySelector(".bp-heading h1")?.textContent !== "Nintendo 64")
       throw Error("Título não atualiza quando muda a plataforma do jogo selecionado");
+    // A selected cartridge gently enlarges while its immediate neighbor moves
+    // aside; CSS transitions avoid changing track layout or clipping the glow.
+    if (!libraryGrid.querySelectorAll(".bp-card")[0].classList.contains("bp-neighbor-left"))
+      throw Error("Cartucho vizinho à esquerda não recebeu afastamento suave");
+    const selectedScale = parseFloat(libraryGrid.style.getPropertyValue("--bp-selected-scale"));
+    const regularScale = parseFloat(libraryGrid.style.getPropertyValue("--bp-icon-scale"));
+    if (!(selectedScale > regularScale && selectedScale < regularScale * 1.08))
+      throw Error("Zoom do cartucho selecionado está fora do intervalo discreto");
+    if (!reducedMotion &&
+        !getComputedStyle(libraryGrid.querySelector(".bp-cover")).transitionProperty.includes("transform"))
+      throw Error("Aumento e afastamento dos cartuchos precisam de transição de transformação");
     if (typeof api.BigPictureAccent !== "function")
       throw Error("Método que extrai cor dominante da Hero não registrado no Wails");
     const heroAccent = (await api.BigPictureAccent("Smoke2")).toUpperCase();
@@ -483,6 +507,11 @@
     }
     await wait(() => document.querySelector(".big-picture").classList.contains("bp-cartridges"),
       "Visualização de cartucho");
+    if (!picture.classList.contains("bp-default-background") ||
+        (waveStyle().animationName !== "none" && waveStyle().animationPlayState !== "running"))
+      throw Error("Fundo padrão deve ativar as ondas animadas (exceto movimento reduzido)");
+    if (!reducedMotion && getComputedStyle(ambientWaves).transitionProperty !== "opacity")
+      throw Error("Alternância para ondas precisa de transição suave");
     // The cartridge image must sit directly over the Hero without a
     // dark rectangular background or filled selected card.
     const cartridgeCard = document.querySelector(".bp-cartridges .bp-card.selected");
@@ -546,6 +575,9 @@
     if (!document.querySelector(".big-picture").classList.contains("bp-scroll-horizontal") ||
         document.querySelector(".bp-grid").style.getPropertyValue("--bp-icon-scale") !== "1.1")
       throw Error("Direção e escala do layout não persistiram ao reabrir");
+    if (!document.querySelector(".big-picture").classList.contains("bp-default-background") ||
+        document.querySelector(".bp-default-waves")?.querySelectorAll(".bp-wave-path").length < 3)
+      throw Error("Fundo animado não foi restaurado ao reabrir");
     if (document.querySelector(".big-picture").dataset.controller !== "playstation")
       throw Error("Padrão de botões PlayStation não foi recuperado ao abrir Big Picture");
     document.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape",bubbles:true,cancelable:true}));
