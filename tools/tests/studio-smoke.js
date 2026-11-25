@@ -176,6 +176,14 @@
     const single = rect("cartridge");
     if (Math.abs(single.x + single.w / 2 - 800) > tolerance)
       throw Error("Camada ímpar não centralizou com precisão");
+    // Group alignment deliberately dirties the layout. Save it before
+    // leaving the editor; otherwise the navigation confirmation modal
+    // blocks this automated driver (not an application rendering freeze).
+    await probe.Progress("before-group-save");
+    click("Salvar layout");
+    await wait(() => document.querySelector("#notice").textContent === "Layout salvo",
+      "Salvar alinhamento de grupo");
+    await probe.Progress("group-saved");
 
     await probe.Progress("before-capture");
     await probe.Capture("editor");
