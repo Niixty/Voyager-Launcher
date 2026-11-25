@@ -8,10 +8,10 @@ import (
 )
 func TestBigPictureOptionsDefaultsAndLegacy(t *testing.T){
     d:=defaultBigPictureOptions()
-    if d.View!="grid" || d.Background!="hero" || d.ButtonStyle!="auto" || !d.ShowTitle || !d.ShowPlatform || !d.BlurBackground || d.ScrollDirection!="vertical" || d.Columns!=4 || d.Rows!=2 || d.IconSize!=100 {t.Fatalf("invalid default: %+v",d)}
+    if d.DefaultBackgroundHeroColor || d.View!="grid" || d.Background!="hero" || d.ButtonStyle!="auto" || !d.ShowTitle || !d.ShowPlatform || !d.BlurBackground || d.ScrollDirection!="vertical" || d.Columns!=4 || d.Rows!=2 || d.IconSize!=100 {t.Fatalf("invalid default: %+v",d)}
     var fromOld BigPictureOptions=d
     if err:=json.Unmarshal([]byte(`{"view":"cartridge","background":"solid","dim":80}`),&fromOld);err!=nil{t.Fatal(err)}
-    if fromOld.ButtonStyle!="auto" || !fromOld.ShowTitle || !fromOld.ShowPlatform || !fromOld.BlurBackground || fromOld.View!="cartridge" || fromOld.Dim!=80 ||
+    if fromOld.DefaultBackgroundHeroColor || fromOld.ButtonStyle!="auto" || !fromOld.ShowTitle || !fromOld.ShowPlatform || !fromOld.BlurBackground || fromOld.View!="cartridge" || fromOld.Dim!=80 ||
         fromOld.ScrollDirection!="vertical" || fromOld.Columns!=4 || fromOld.Rows!=2 || fromOld.IconSize!=100 {
         t.Fatalf("backward compatibility: %+v",fromOld)
     }
@@ -56,5 +56,19 @@ func TestBigPictureScrollingLayoutPreference(t *testing.T) {
         if restored.ScrollDirection!=direction || restored.Columns!=6 || restored.Rows!=3 || restored.IconSize!=130 {
             t.Fatalf("layout preference not preserved: %+v",restored)
         }
+    }
+}
+
+func TestBigPictureHeroWavePalettePreference(t *testing.T) {
+    options:=defaultBigPictureOptions()
+    options.Background="solid"
+    options.DefaultBackgroundHeroColor=true
+    encoded,err:=json.Marshal(options)
+    if err!=nil {t.Fatal(err)}
+    var restored BigPictureOptions
+    if err:=json.Unmarshal(encoded,&restored);err!=nil {t.Fatal(err)}
+    restored=restored.normalized()
+    if restored.Background!="solid" || !restored.DefaultBackgroundHeroColor {
+        t.Fatalf("Cor da Hero no fundo padrão não persistiu: %+v",restored)
     }
 }
