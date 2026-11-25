@@ -17,6 +17,7 @@
   const heading = (title) =>
     document.querySelector("h1")?.textContent === title;
   try {
+    await probe.Progress("begin");
     await wait(() => heading("Biblioteca"), "Abrir biblioteca");
     click("+ Adicionar jogo");
     const inputs = document.querySelectorAll("form input");
@@ -62,6 +63,7 @@
     );
     if (!document.body.innerText.includes("Image / Imagem (PNG)"))
       throw Error("Caminho da capa no VibePollo ausente");
+    await probe.Progress("before-editor");
     click("Editor de loading");
     await wait(
       () =>
@@ -70,6 +72,7 @@
           ?.style.backgroundImage.includes("data:image/png"),
       "Composição nativa",
     );
+    await probe.Progress("editor-ready");
     const layer = [...document.querySelectorAll(".panel select")].find((select) =>
       [...select.options].some((option) => option.value === "title"),
     );
@@ -104,11 +107,13 @@
       throw Error("Método TestLoading não registrado na interface Wails");
     if (![...document.querySelectorAll("button")].some(b => b.textContent === "Testar loading (10 s)"))
       throw Error("Botão Testar loading ausente");
+    await probe.Progress("before-save");
     click("Salvar layout");
     await wait(
       () => document.querySelector("#notice").textContent === "Layout salvo",
       "Salvar layout",
     );
+    await probe.Progress("saved");
     const saved = await api.Layout("Smoke");
     const titleSaved = saved.elements.find((n) => n.id === "title");
     if (titleSaved.textAlign !== "right" || titleSaved.verticalAlign !== "bottom") {
@@ -116,6 +121,7 @@
     }
     if (titleSaved.x !== -50 || saved.elements.find(n => n.id === "cartridge").y !== -50)
       throw Error("Coordenadas negativas foram perdidas ao salvar o layout");
+    await probe.Progress("before-shift");
     // Shift multi-selection must move all selected layers as a group.
     if ([...layer.options].some((option) => option.value === "heading"))
       throw Error("Camada Mensagem ainda aparece no editor");
@@ -125,6 +131,7 @@
     titleNode.dispatchEvent(new PointerEvent("pointerdown", {
       bubbles: true, cancelable: true, pointerId: 99, shiftKey: true,
     }));
+    await probe.Progress("shift-dispatched");
     if (stage.querySelectorAll(".node.selected").length !== 2)
       throw Error("Shift + clique não selecionou duas camadas");
     const rect = (id) => {
@@ -145,6 +152,7 @@
       const end = Math.max(a[axis] + a[span], b[axis] + b[span]);
       return (start + end) / 2;
     };
+    await probe.Progress("before-center-x");
     click("Centralizar só horizontal");
     if (Math.abs(centered("x", "w") - 800) > tolerance)
       throw Error("Centralização horizontal do grupo está incorreta");
@@ -155,6 +163,7 @@
                  (originalCartridge.x - originalTitle.x)) > tolerance)
       throw Error("Seleção múltipla perdeu o espaçamento entre camadas");
     const positionAfterHorizontal = rect("title").x;
+    await probe.Progress("before-center-y");
     click("Centralizar só vertical");
     if (Math.abs(centered("y", "h") - 450) > tolerance)
       throw Error("Centralização vertical do grupo está incorreta");
@@ -168,7 +177,10 @@
     if (Math.abs(single.x + single.w / 2 - 800) > tolerance)
       throw Error("Camada ímpar não centralizou com precisão");
 
+    await probe.Progress("before-capture");
     await probe.Capture("editor");
+    await probe.Progress("after-capture");
+    await probe.Progress("before-settings");
     click("Configurações");
     await wait(() => heading("Configurações"), "Configurações");
     const updatePanel = document.querySelector(".update-panel");
@@ -187,6 +199,7 @@
         document.querySelector("#notice").textContent === "Preferências salvas",
       "Salvar preferências",
     );
+    await probe.Progress("before-library-return");
     click("Biblioteca");
     await wait(
       () => document.querySelector(".card strong")?.textContent === "Órbita",
@@ -202,6 +215,7 @@
     const launches = [];
     const originalRun = api.Run;
     api.Run = async (id, mode) => launches.push([id, mode]);
+    await probe.Progress("before-bigpicture");
     click("Big Picture");
     await wait(() => document.querySelectorAll(".bp-card").length === 2, "Capas Big Picture");
     const iconAPI = window.VoyagerGamepadIcons;
@@ -229,6 +243,7 @@
     buttons[1].pressed = true;
     await wait(() => !document.querySelector(".big-picture"), "Botão B");
     api.Run = originalRun;
+    await probe.Progress("all-passed");
     await probe.Done("");
   } catch (e) {
     await probe.Done(String(e.stack || e));

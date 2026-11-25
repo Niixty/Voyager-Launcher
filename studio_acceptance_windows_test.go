@@ -35,6 +35,10 @@ type AcceptanceProbe struct {
 	result  chan string
 }
 
+// Progress breadcrumbs make WebView2 driver timeouts diagnosable on CI.
+func (p *AcceptanceProbe) Progress(stage string) {
+    fmt.Printf("STUDIO_ACCEPTANCE_STEP: %s\n",stage)
+}
 func (p *AcceptanceProbe) Done(problem string) {
 	select {
 	case p.result <- problem:
