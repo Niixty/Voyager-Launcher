@@ -9,6 +9,7 @@ async function openBigPicture() {
     view: "grid", background: "hero", buttonStyle: "auto", showTitle: true,
     showPlatform: true, blurBackground: true, dim: 65,
     scrollDirection: "vertical", columns: 4, rows: 2, iconSize: 100,
+    defaultBackgroundHeroColor: false,
   };
   const prefs = { ...defaults, ...(await api.BigPictureOptions()) };
   if (!["auto", "xbox", "playstation"].includes(prefs.buttonStyle)) prefs.buttonStyle = "auto";
@@ -144,6 +145,9 @@ async function openBigPicture() {
       () => { prefs.iconSize = prefs.iconSize >= 140 ? 60 : prefs.iconSize + 10; }],
     ["background", "Fundo", () => prefs.background === "hero" ? "Hero do jogo selecionado" : "Fundo padrão",
       () => { prefs.background = prefs.background === "hero" ? "solid" : "hero"; }],
+    ["defaultBackgroundHeroColor", "Cor do fundo padrão",
+      () => prefs.defaultBackgroundHeroColor ? "Seguir cor da Hero" : "Azul original",
+      () => { prefs.defaultBackgroundHeroColor = !prefs.defaultBackgroundHeroColor; }],
     ["blurBackground", "Desfoque do fundo", () => prefs.blurBackground ? "Ativado" : "Desativado",
       () => { prefs.blurBackground = !prefs.blurBackground; }],
     ["showTitle", "Nome dos jogos", () => prefs.showTitle ? "Visível" : "Oculto",
@@ -239,6 +243,7 @@ async function openBigPicture() {
       cards[selected].scrollIntoView({ block: "nearest", inline: "nearest" });
     }
     refreshBackground();
+    refreshWaveColor(panel.style.getPropertyValue("--bp-glow-color") || "#ACB7C1");
     refreshGlyphs(lastDetectedFamily);
   }
   function refreshSelectionSpacing() {
@@ -282,6 +287,35 @@ async function openBigPicture() {
     };
     heroLayers[nextSlot].replaceChildren(art);
   }
+  function refreshWaveColor(color) {
+    const active = !!prefs.defaultBackgroundHeroColor;
+    panel.classList.toggle("bp-wave-follows-hero", active);
+    if (!active) {
+      waves.style.removeProperty("--bp-wave-deep");
+      waves.style.removeProperty("--bp-wave-mid");
+      waves.style.removeProperty("--bp-wave-light");
+      waves.style.removeProperty("--bp-wave-hue-shift");
+      return;
+    }
+    // Same accent as the highlighted cart, from the native Hero histogram.
+    // Tint both the wave layers and the dark backdrop to match the game's Hero.
+    const hex = /^#[0-9a-f]{6}$/i.test(color) ? color : "#ACB7C1";
+    const channels = [1, 3, 5].map(pos => parseInt(hex.slice(pos, pos + 2), 16) / 255);
+    const max = Math.max(...channels), min = Math.min(...channels), delta = max - min;
+    let hue = 214;
+    if (delta > 0.0001) {
+      const [r, g, b] = channels;
+      if (max === r) hue = ((g - b) / delta) % 6;
+      else if (max === g) hue = (b - r) / delta + 2;
+      else hue = (r - g) / delta + 4;
+      hue = (hue * 60 + 360) % 360;
+    }
+    const h = Math.round(hue);
+    waves.style.setProperty("--bp-wave-deep", `hsl(${h} 60% 7%)`);
+    waves.style.setProperty("--bp-wave-mid", `hsl(${h} 68% 16%)`);
+    waves.style.setProperty("--bp-wave-light", `hsl(${h} 72% 23%)`);
+    waves.style.setProperty("--bp-wave-hue-shift", `${Math.round(hue - 214)}deg`);
+  }
   function refreshGlyphs(detectedFamily) {
     lastDetectedFamily = detectedFamily || "xbox";
     const family = prefs.buttonStyle === "auto" ? lastDetectedFamily : prefs.buttonStyle;
@@ -322,6 +356,7 @@ async function openBigPicture() {
       panel.style.setProperty("--bp-glow-color", color);
       panel.style.setProperty("--bp-glow-soft", color + "88");
       panel.style.setProperty("--bp-glow-wide", color + "50");
+      refreshWaveColor(color);
     };
     if (!id) { apply("#ACB7C1"); return; }
     if (accentCache.has(id)) { apply(accentCache.get(id)); return; }
