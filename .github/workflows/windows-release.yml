@@ -31,6 +31,20 @@ jobs:
         run: |
           go test -vet=off ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validar script de reparo silencioso do Agendador
+        shell: pwsh
+        run: |
+          # Windows PowerShell 5.1 is used for actual task repair. Parse the
+          # embedded source without registering or modifying any host tasks.
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path (Get-Location) 'silent_schedule_repair.ps1'),
+            [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            throw ('PowerShell task repair syntax invalid: ' + ($errors -join '; '))
+          }
+          Write-Host 'Scheduled Task repair script parses successfully'
       - name: Preparar icone do aplicativo
         shell: pwsh
         run: |
