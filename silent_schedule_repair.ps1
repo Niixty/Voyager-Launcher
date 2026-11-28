@@ -43,8 +43,23 @@ try {
         Repair-VoyagerTask 'Voyager-Git-Sync' $wscriptExe $gitArgs $repoDir
     } else {
         # Do not replace a working Git task with a broken path if the clone
-        # or its tools were moved; report the recovery action instead.
-        Write-RepairLog 'WARN: Git sync wrapper missing; run ATIVAR-SINCRONIZACAO.cmd in the current clone.'
+        # or its tools were moved. Only log if a task actually needs repair.
+        $gitTask = Get-ScheduledTask -TaskPath '\' -TaskName 'Voyager-Git-Sync' -ErrorAction SilentlyContinue
+        if ($null -ne $gitTask) {
+            $gitActions = @($gitTask.Actions)
+            if ($gitActions.Count -ne 1 -or
+                ([string]$gitActions[0].Execute) -match '(?i)(cmd|powershell|cscript)(\.exe)?
+    if (Test-Path -LiteralPath $launcherExe -PathType Leaf) {
+        # The Windows GUI subsystem build exits silently for --check-updates.
+        Repair-VoyagerTask 'Voyager-EXE-Update' $launcherExe '--check-updates' $launcherDir
+    }
+} catch {
+    Write-RepairLog ('WARN: Windows task repair unavailable: ' + $_.Exception.Message)
+}
+) {
+                Write-RepairLog 'WARN: Git sync wrapper missing; run ATIVAR-SINCRONIZACAO.cmd in the current clone.'
+            }
+        }
     }
     if (Test-Path -LiteralPath $launcherExe -PathType Leaf) {
         # The Windows GUI subsystem build exits silently for --check-updates.
