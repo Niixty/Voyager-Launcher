@@ -32,10 +32,11 @@ function Agendar {
         [Parameter(Mandatory=$true)][string]$Nome,
         [Parameter(Mandatory=$true)][string]$Executavel,
         [Parameter(Mandatory=$true)][string]$Argumentos,
-        [Parameter(Mandatory=$true)][int]$Minutos
+        [Parameter(Mandatory=$true)][int]$Minutos,
+        [Parameter(Mandatory=$true)][string]$DiretorioTrabalho
     )
     # Separar Execute e Argument evita os problemas de aspas do /TR do schtasks.exe.
-    $action = New-ScheduledTaskAction -Execute $Executavel -Argument $Argumentos -WorkingDirectory $repo
+    $action = New-ScheduledTaskAction -Execute $Executavel -Argument $Argumentos -WorkingDirectory $DiretorioTrabalho
     $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(1)) `
         -RepetitionInterval (New-TimeSpan -Minutes $Minutos) `
         -RepetitionDuration (New-TimeSpan -Days 3650)
@@ -57,10 +58,10 @@ function Agendar {
 $silent = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'Sincronizar-Git-Silencioso.vbs')).Path
 $wscript = Join-Path $env:WINDIR 'System32\wscript.exe'
 $syncArgs = '//B //Nologo "' + $silent + '"'
-Agendar -Nome 'Voyager-Git-Sync' -Executavel $wscript -Argumentos $syncArgs -Minutos 10
+Agendar -Nome 'Voyager-Git-Sync' -Executavel $wscript -Argumentos $syncArgs -Minutos 10 -DiretorioTrabalho $repo
 
 if (Test-Path -LiteralPath $launcher -PathType Leaf) {
-    Agendar -Nome 'Voyager-EXE-Update' -Executavel $launcher -Argumentos '--check-updates' -Minutos 30
+    Agendar -Nome 'Voyager-EXE-Update' -Executavel $launcher -Argumentos '--check-updates' -Minutos 30 -DiretorioTrabalho $PastaVoyager
 } else {
     Write-Warning "EXE nao encontrado em: $launcher. Tarefa Voyager-EXE-Update nao registrada."
     Write-Host 'Execute INSTALAR-VOYAGER.cmd ou informe a pasta correta do aplicativo e tente novamente.'
