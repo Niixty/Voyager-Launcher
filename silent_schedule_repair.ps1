@@ -5,7 +5,8 @@ $launcherDir = __VOYAGER_LAUNCHER_DIR__
 $syncWrapper = __VOYAGER_SYNC_WRAPPER__
 $launcherExe = Join-Path $launcherDir 'VoyagerLauncher.exe'
 $repoDir = Split-Path -Parent $launcherDir
-$windowsDir = [Environment]::GetFolderPath('Windows')
+$windowsDir = $env:SystemRoot
+if ([string]::IsNullOrWhiteSpace($windowsDir)) { $windowsDir = $env:WINDIR }
 $wscriptExe = Join-Path $windowsDir 'System32\wscript.exe'
 $logPath = Join-Path $env:LOCALAPPDATA 'VoyagerLauncher\scheduled-task-repair.log'
 function Write-RepairLog([string]$message) {
