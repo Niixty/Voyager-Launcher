@@ -24,6 +24,9 @@ func main() {
 	// Ela nao abre janela, nao bloqueia o Sunshine e nao altera a pasta Games.
 	args := os.Args[1:]
 	if len(args) == 1 && strings.EqualFold(args[0], "--check-updates") {
+        // Scheduled checks also repair stale task commands, even when the
+        // user has not opened the main UI. Runs with no console window.
+        migrateSilentScheduledTask()
 		if _, err := probeUpdateStatus(); err != nil {
             logSilentUpdateError(err)
         }
@@ -83,8 +86,8 @@ func main() {
 		return
 	}
 	if len(args) == 0 {
-        // Repair legacy scheduled Git sync tasks silently on user startup;
-        // never spawn a visible CMD/PowerShell window over a game.
+        // Verify both Task Scheduler actions on every GUI startup.
+        // No one-shot marker: a task recreated later must be repaired too.
         go migrateSilentScheduledTask()
 		if err := newStudio(); err == nil {
 			return
